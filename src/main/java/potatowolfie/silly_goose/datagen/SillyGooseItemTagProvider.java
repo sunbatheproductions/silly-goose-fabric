@@ -1,22 +1,21 @@
 package potatowolfie.silly_goose.datagen;
 
-import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
-import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
-import net.minecraft.item.Items;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.registry.tag.ItemTags;
+import net.fabricmc.fabric.api.datagen.v1.FabricPackOutput;
+import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagsProvider;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.tags.ItemTags;
 import potatowolfie.silly_goose.item.SillyGooseItems;
 import potatowolfie.silly_goose.registry.SillyGooseItemTags;
 
 import java.util.concurrent.CompletableFuture;
 
-public class SillyGooseItemTagProvider extends FabricTagProvider.ItemTagProvider {
-    public SillyGooseItemTagProvider(FabricDataOutput output, CompletableFuture<RegistryWrapper.WrapperLookup> completableFuture) {
+public class SillyGooseItemTagProvider extends FabricTagsProvider.ItemTagsProvider {
+    public SillyGooseItemTagProvider(FabricPackOutput output, CompletableFuture<HolderLookup.Provider> completableFuture) {
         super(output, completableFuture);
     }
 
     @Override
-    protected void configure(RegistryWrapper.WrapperLookup wrapperLookup) {
+    protected void addTags(HolderLookup.Provider wrapperLookup) {
         valueLookupBuilder(ItemTags.WOLF_FOOD)
                 .add(SillyGooseItems.RAW_GOOSE)
                 .add(SillyGooseItems.COOKED_GOOSE);

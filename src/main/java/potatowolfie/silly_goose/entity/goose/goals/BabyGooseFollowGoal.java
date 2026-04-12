@@ -1,18 +1,18 @@
 package potatowolfie.silly_goose.entity.goose.goals;
 
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Iterator;
 import java.util.List;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.phys.Vec3;
 
 public class BabyGooseFollowGoal extends Goal {
-    private final AnimalEntity animal;
+    private final Animal animal;
     @Nullable
-    private AnimalEntity parent;
+    private Animal parent;
     private final double speed;
     private int delay;
 
@@ -21,26 +21,26 @@ public class BabyGooseFollowGoal extends Goal {
     private static final double WATER_EXIT_BOOST_STRENGTH = 0.3;
 
     private float targetYaw = 0;
-    private Vec3d lastParentPos = null;
+    private Vec3 lastParentPos = null;
 
-    public BabyGooseFollowGoal(AnimalEntity animal, double speed) {
+    public BabyGooseFollowGoal(Animal animal, double speed) {
         this.animal = animal;
         this.speed = speed;
     }
 
-    public boolean canStart() {
-        if (this.animal.getBreedingAge() >= 0) {
+    public boolean canUse() {
+        if (this.animal.getAge() >= 0) {
             return false;
         } else {
-            List<? extends AnimalEntity> list = this.animal.getEntityWorld().getNonSpectatingEntities(this.animal.getClass(), this.animal.getBoundingBox().expand(8.0, 4.0, 8.0));
-            AnimalEntity animalEntity = null;
+            List<? extends Animal> list = this.animal.level().getEntitiesOfClass(this.animal.getClass(), this.animal.getBoundingBox().inflate(8.0, 4.0, 8.0));
+            Animal animalEntity = null;
             double d = Double.MAX_VALUE;
             Iterator var5 = list.iterator();
 
             while(var5.hasNext()) {
-                AnimalEntity animalEntity2 = (AnimalEntity)var5.next();
-                if (animalEntity2.getBreedingAge() >= 0) {
-                    double e = this.animal.squaredDistanceTo(animalEntity2);
+                Animal animalEntity2 = (Animal)var5.next();
+                if (animalEntity2.getAge() >= 0) {
+                    double e = this.animal.distanceToSqr(animalEntity2);
                     if (!(e > d)) {
                         d = e;
                         animalEntity = animalEntity2;
@@ -59,21 +59,21 @@ public class BabyGooseFollowGoal extends Goal {
         }
     }
 
-    public boolean shouldContinue() {
-        if (this.animal.getBreedingAge() >= 0) {
+    public boolean canContinueToUse() {
+        if (this.animal.getAge() >= 0) {
             return false;
         } else if (!this.parent.isAlive()) {
             return false;
         } else {
-            double d = this.animal.squaredDistanceTo(this.parent);
+            double d = this.animal.distanceToSqr(this.parent);
             return !(d < 9.0) && !(d > 256.0);
         }
     }
 
     public void start() {
         this.delay = 0;
-        this.lastParentPos = this.parent != null ? this.parent.getEntityPos() : null;
-        this.targetYaw = this.animal.getYaw();
+        this.lastParentPos = this.parent != null ? this.parent.position() : null;
+        this.targetYaw = this.animal.getYRot();
         this.waterExitTimer = WATER_EXIT_BOOST_INTERVAL;
     }
 
@@ -84,15 +84,15 @@ public class BabyGooseFollowGoal extends Goal {
 
     public void tick() {
         if (--this.delay <= 0) {
-            this.delay = this.getTickCount(3);
+            this.delay = this.adjustedTickDelay(3);
 
-            if (this.animal.isTouchingWater() && this.parent != null) {
+            if (this.animal.isInWater() && this.parent != null) {
                 handleDirectSwimming();
             } else {
-                this.animal.getNavigation().startMovingTo(this.parent, this.speed);
+                this.animal.getNavigation().moveTo(this.parent, this.speed);
             }
         } else {
-            if (this.animal.isTouchingWater() && this.parent != null) {
+            if (this.animal.isInWater() && this.parent != null) {
                 updateRotation();
             }
         }
@@ -102,8 +102,8 @@ public class BabyGooseFollowGoal extends Goal {
     private void handleDirectSwimming() {
         if (this.parent == null) return;
 
-        Vec3d targetPos = this.parent.getEntityPos();
-        Vec3d currentPos = this.animal.getEntityPos();
+        Vec3 targetPos = this.parent.position();
+        Vec3 currentPos = this.animal.position();
 
         double distance = currentPos.distanceTo(targetPos);
         if (distance < 0.5) {
@@ -111,10 +111,10 @@ public class BabyGooseFollowGoal extends Goal {
             return;
         }
 
-        Vec3d parentVelocity = this.parent.getVelocity();
-        Vec3d predictedPos = targetPos.add(parentVelocity.multiply(2.0));
+        Vec3 parentVelocity = this.parent.getDeltaMovement();
+        Vec3 predictedPos = targetPos.add(parentVelocity.scale(2.0));
 
-        Vec3d direction = predictedPos.subtract(currentPos).normalize();
+        Vec3 direction = predictedPos.subtract(currentPos).normalize();
 
         double newTargetYaw = Math.atan2(-direction.x, direction.z) * (180.0 / Math.PI);
 
@@ -123,7 +123,7 @@ public class BabyGooseFollowGoal extends Goal {
 
         this.targetYaw = (float)newTargetYaw;
 
-        float currentYaw = this.animal.getYaw();
+        float currentYaw = this.animal.getYRot();
         while (currentYaw > 180) currentYaw -= 360;
         while (currentYaw < -180) currentYaw += 360;
 
@@ -135,30 +135,30 @@ public class BabyGooseFollowGoal extends Goal {
         float yawAdjustment = Math.max(-maxRotation, Math.min(maxRotation, yawDiff));
         float newYaw = currentYaw + yawAdjustment;
 
-        this.animal.setYaw(newYaw);
-        this.animal.setBodyYaw(newYaw);
-        this.animal.setHeadYaw(newYaw);
+        this.animal.setYRot(newYaw);
+        this.animal.setYBodyRot(newYaw);
+        this.animal.setYHeadRot(newYaw);
 
         if (Math.abs(yawDiff) < 60 && distance > 0.8) {
             double speedMultiplier = Math.min(1.5, distance / 4.0);
             double swimSpeed = this.speed * 0.18 * speedMultiplier;
 
-            Vec3d velocity = this.animal.getVelocity();
+            Vec3 velocity = this.animal.getDeltaMovement();
 
-            this.animal.setVelocity(
+            this.animal.setDeltaMovement(
                     direction.x * swimSpeed,
                     velocity.y,
                     direction.z * swimSpeed
             );
-            this.animal.velocityDirty = true;
+            this.animal.needsSync = true;
         } else {
-            Vec3d velocity = this.animal.getVelocity();
-            this.animal.setVelocity(
+            Vec3 velocity = this.animal.getDeltaMovement();
+            this.animal.setDeltaMovement(
                     velocity.x * 0.7,
                     velocity.y,
                     velocity.z * 0.7
             );
-            this.animal.velocityDirty = true;
+            this.animal.needsSync = true;
         }
 
         this.animal.getNavigation().stop();
@@ -169,9 +169,9 @@ public class BabyGooseFollowGoal extends Goal {
     private void updateRotation() {
         if (this.parent == null) return;
 
-        Vec3d targetPos = this.parent.getEntityPos();
-        Vec3d currentPos = this.animal.getEntityPos();
-        Vec3d direction = targetPos.subtract(currentPos).normalize();
+        Vec3 targetPos = this.parent.position();
+        Vec3 currentPos = this.animal.position();
+        Vec3 direction = targetPos.subtract(currentPos).normalize();
 
         double newTargetYaw = Math.atan2(-direction.x, direction.z) * (180.0 / Math.PI);
         while (newTargetYaw > 180) newTargetYaw -= 360;
@@ -179,7 +179,7 @@ public class BabyGooseFollowGoal extends Goal {
 
         this.targetYaw = (float)newTargetYaw;
 
-        float currentYaw = this.animal.getYaw();
+        float currentYaw = this.animal.getYRot();
         while (currentYaw > 180) currentYaw -= 360;
         while (currentYaw < -180) currentYaw += 360;
 
@@ -191,9 +191,9 @@ public class BabyGooseFollowGoal extends Goal {
         float yawAdjustment = Math.max(-maxRotation, Math.min(maxRotation, yawDiff));
         float newYaw = currentYaw + yawAdjustment;
 
-        this.animal.setYaw(newYaw);
-        this.animal.setBodyYaw(newYaw);
-        this.animal.setHeadYaw(newYaw);
+        this.animal.setYRot(newYaw);
+        this.animal.setYBodyRot(newYaw);
+        this.animal.setYHeadRot(newYaw);
     }
 
     private void checkAndApplyWaterExitBoost() {
@@ -201,22 +201,22 @@ public class BabyGooseFollowGoal extends Goal {
         if (waterExitTimer <= 0) {
             waterExitTimer = WATER_EXIT_BOOST_INTERVAL;
 
-            if (animal.isTouchingWater()) {
-                BlockPos abovePos = animal.getBlockPos().up();
+            if (animal.isInWater()) {
+                BlockPos abovePos = animal.blockPosition().above();
 
-                if (!animal.getEntityWorld().getFluidState(abovePos).isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
+                if (!animal.level().getFluidState(abovePos).is(net.minecraft.tags.FluidTags.WATER)) {
                     boolean hasNearbyLand = false;
-                    BlockPos currentPos = animal.getBlockPos();
+                    BlockPos currentPos = animal.blockPosition();
 
                     for (int x = -1; x <= 1; x++) {
                         for (int z = -1; z <= 1; z++) {
                             if (x == 0 && z == 0) continue;
 
-                            BlockPos checkPos = currentPos.add(x, 0, z);
-                            BlockPos checkPosAbove = currentPos.add(x, 1, z);
+                            BlockPos checkPos = currentPos.offset(x, 0, z);
+                            BlockPos checkPosAbove = currentPos.offset(x, 1, z);
 
-                            boolean isLand = !animal.getEntityWorld().getFluidState(checkPos).isIn(net.minecraft.registry.tag.FluidTags.WATER);
-                            boolean isLandAbove = !animal.getEntityWorld().getFluidState(checkPosAbove).isIn(net.minecraft.registry.tag.FluidTags.WATER);
+                            boolean isLand = !animal.level().getFluidState(checkPos).is(net.minecraft.tags.FluidTags.WATER);
+                            boolean isLandAbove = !animal.level().getFluidState(checkPosAbove).is(net.minecraft.tags.FluidTags.WATER);
 
                             if (isLand || isLandAbove) {
                                 hasNearbyLand = true;
@@ -227,9 +227,9 @@ public class BabyGooseFollowGoal extends Goal {
                     }
 
                     if (hasNearbyLand) {
-                        Vec3d velocity = animal.getVelocity();
-                        animal.setVelocity(velocity.x, WATER_EXIT_BOOST_STRENGTH, velocity.z);
-                        animal.velocityDirty = true;
+                        Vec3 velocity = animal.getDeltaMovement();
+                        animal.setDeltaMovement(velocity.x, WATER_EXIT_BOOST_STRENGTH, velocity.z);
+                        animal.needsSync = true;
                     }
                 }
             }

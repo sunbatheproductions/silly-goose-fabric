@@ -1,42 +1,46 @@
 package potatowolfie.silly_goose.entity.goose;
 
-import net.minecraft.component.ComponentType;
-import net.minecraft.component.ComponentsAccess;
-import net.minecraft.entity.*;
-import net.minecraft.entity.ai.goal.*;
-import net.minecraft.entity.ai.pathing.PathNodeType;
-import net.minecraft.entity.attribute.DefaultAttributeContainer;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.data.DataTracker;
-import net.minecraft.entity.data.TrackedData;
-import net.minecraft.entity.data.TrackedDataHandlerRegistry;
-import net.minecraft.entity.passive.AnimalEntity;
-import net.minecraft.entity.passive.PassiveEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.spawn.SpawnContext;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.entry.LazyRegistryEntryReference;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.registry.tag.FluidTags;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.storage.ReadView;
-import net.minecraft.storage.WriteView;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Uuids;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.LocalDifficulty;
-import net.minecraft.world.ServerWorldAccess;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.component.DataComponentGetter;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.DifficultyInstance;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.goal.BreedGoal;
+import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.PanicGoal;
+import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
+import net.minecraft.world.entity.ai.goal.TemptGoal;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.variant.SpawnContext;
+import net.minecraft.world.entity.variant.VariantUtils;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import potatowolfie.silly_goose.advancement.UnfairTradeAdvancementHandler;
 import potatowolfie.silly_goose.entity.SillyGooseEntities;
@@ -52,11 +56,13 @@ import potatowolfie.silly_goose.sound.SillyGooseSounds;
 import java.util.List;
 import java.util.UUID;
 
-public class GooseEntity extends AnimalEntity {
-    private static final TrackedData<RegistryEntry<GooseVariant>> VARIANT;
-    private static final TrackedData<Boolean> PREFERS_WATER;
-    private static final TrackedData<Boolean> CAN_PICKUP_LOOT;
-    private static final TrackedData<Boolean> IS_IN_HIT_AND_RUN_MODE;
+public class GooseEntity extends Animal {
+    private static final EntityDimensions BABY_DIMENSIONS = EntityDimensions.scalable(0.3F, 0.6F).withEyeHeight(0.48F);
+
+    private static final EntityDataAccessor<Holder<GooseVariant>> VARIANT;
+    private static final EntityDataAccessor<Boolean> PREFERS_WATER;
+    private static final EntityDataAccessor<Boolean> CAN_PICKUP_LOOT;
+    private static final EntityDataAccessor<Boolean> IS_IN_HIT_AND_RUN_MODE;
 
     public final AnimationState idleAnimationState = new AnimationState();
     public final AnimationState idleWaterAnimationState = new AnimationState();
@@ -65,6 +71,14 @@ public class GooseEntity extends AnimalEntity {
     public final AnimationState runAnimationState = new AnimationState();
     public final AnimationState swimAnimationState = new AnimationState();
     public final AnimationState swimFastAnimationState = new AnimationState();
+
+    public final AnimationState babyIdleAnimationState = new AnimationState();
+    public final AnimationState babyIdleWaterAnimationState = new AnimationState();
+    public final AnimationState babyWingsUpIdleAnimationState = new AnimationState();
+    public final AnimationState babyWalkAnimationState = new AnimationState();
+    public final AnimationState babyRunAnimationState = new AnimationState();
+    public final AnimationState babySwimAnimationState = new AnimationState();
+    public final AnimationState babySwimFastAnimationState = new AnimationState();
 
     private int idleAnimationTimeout = 0;
     private boolean isIdleAnimationRunning = false;
@@ -102,46 +116,46 @@ public class GooseEntity extends AnimalEntity {
     private static final long MAX_REVENGE_DURATION_MS = 200 * 60 * 1000L;
     private static final double REVENGE_NOTIFICATION_RADIUS = 64.0;
 
-    public GooseEntity(EntityType<? extends AnimalEntity> entityType, World world) {
+    public GooseEntity(EntityType<? extends Animal> entityType, Level world) {
         super(entityType, world);
-        this.setPathfindingPenalty(PathNodeType.WATER, 0.0F);
+        this.setPathfindingMalus(PathType.WATER, 0.0F);
     }
 
     @Override
-    protected void initGoals() {
-        this.goalSelector.add(0, new GooseRevengeGoal(this));
-        this.goalSelector.add(1, new GooseHitAndRunGoal(this));
-        this.goalSelector.add(2, new GooseStealFromVillagerGoal(this));
-        this.goalSelector.add(3, new EscapeDangerGoal(this, 1.4));
-        this.goalSelector.add(4, new AnimalMateGoal(this, 1.0));
-        this.goalSelector.add(5, new TemptGoal(this, 1.1, stack -> stack.isIn(ItemTags.CHICKEN_FOOD), false));
-        this.goalSelector.add(6, new BabyGooseFollowGoal(this, 1.1));
-        this.goalSelector.add(7, new GooseWanderGoal(this, 1.0));
-        this.goalSelector.add(8, new LookAtEntityGoal(this, PlayerEntity.class, 6.0F));
-        this.goalSelector.add(9, new LookAroundGoal(this));
+    protected void registerGoals() {
+        this.goalSelector.addGoal(0, new GooseRevengeGoal(this));
+        this.goalSelector.addGoal(1, new GooseHitAndRunGoal(this));
+        this.goalSelector.addGoal(2, new GooseStealFromVillagerGoal(this));
+        this.goalSelector.addGoal(3, new PanicGoal(this, 1.4));
+        this.goalSelector.addGoal(4, new BreedGoal(this, 1.0));
+        this.goalSelector.addGoal(5, new TemptGoal(this, 1.1, stack -> stack.is(ItemTags.CHICKEN_FOOD), false));
+        this.goalSelector.addGoal(6, new BabyGooseFollowGoal(this, 1.1));
+        this.goalSelector.addGoal(7, new GooseWanderGoal(this, 1.0));
+        this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 6.0F));
+        this.goalSelector.addGoal(9, new RandomLookAroundGoal(this));
     }
 
-    public static DefaultAttributeContainer.Builder createGooseAttributes() {
-        return AnimalEntity.createMobAttributes()
-                .add(EntityAttributes.MAX_HEALTH, 10.0)
-                .add(EntityAttributes.MOVEMENT_SPEED, 0.25)
-                .add(EntityAttributes.WATER_MOVEMENT_EFFICIENCY, 1.0)
-                .add(EntityAttributes.ATTACK_DAMAGE, 3.0)
-                .add(EntityAttributes.JUMP_STRENGTH, 0.42)
-                .add(EntityAttributes.TEMPT_RANGE, 10.0);
+    public static AttributeSupplier.Builder createGooseAttributes() {
+        return Animal.createMobAttributes()
+                .add(Attributes.MAX_HEALTH, 10.0)
+                .add(Attributes.MOVEMENT_SPEED, 0.25)
+                .add(Attributes.WATER_MOVEMENT_EFFICIENCY, 1.0)
+                .add(Attributes.ATTACK_DAMAGE, 3.0)
+                .add(Attributes.JUMP_STRENGTH, 0.42)
+                .add(Attributes.TEMPT_RANGE, 10.0);
     }
 
-    protected void initDataTracker(DataTracker.Builder builder) {
-        super.initDataTracker(builder);
-        builder.add(VARIANT, Variants.getOrDefaultOrThrow(this.getRegistryManager(), GooseVariants.TEMPERATE));
-        builder.add(PREFERS_WATER, this.random.nextBoolean());
-        builder.add(CAN_PICKUP_LOOT, false);
-        builder.add(IS_IN_HIT_AND_RUN_MODE, false);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(VARIANT, VariantUtils.getDefaultOrAny(this.registryAccess(), GooseVariants.TEMPERATE));
+        builder.define(PREFERS_WATER, this.random.nextBoolean());
+        builder.define(CAN_PICKUP_LOOT, false);
+        builder.define(IS_IN_HIT_AND_RUN_MODE, false);
     }
 
-    protected void writeCustomData(WriteView view) {
-        super.writeCustomData(view);
-        Variants.writeData(view, this.getVariant());
+    protected void addAdditionalSaveData(ValueOutput view) {
+        super.addAdditionalSaveData(view);
+        VariantUtils.writeVariant(view, this.getVariant());
         view.putBoolean("PrefersWater", this.getPrefersWater());
         view.putBoolean("CanPickUpLoot", this.canPickUpLoot());
         view.putInt("PreferenceChangeTimer", this.preferenceChangeTimer);
@@ -152,33 +166,33 @@ public class GooseEntity extends AnimalEntity {
         view.putInt("BabyPanicTimer", this.babyPanicTimer);
 
         if (this.revengeTargetUUID != null) {
-            view.put("RevengeTargetUUID", Uuids.CODEC, this.revengeTargetUUID);
+            view.store("RevengeTargetUUID", UUIDUtil.AUTHLIB_CODEC, this.revengeTargetUUID);
         }
         view.putInt("RevengeTimer", this.revengeTimer);
         view.putLong("RevengeExpirationTime", this.revengeExpirationTime);
     }
 
-    protected void readCustomData(ReadView view) {
-        super.readCustomData(view);
+    protected void readAdditionalSaveData(ValueInput view) {
+        super.readAdditionalSaveData(view);
         if (!spawnedFromEgg) {
-            Variants.fromData(view, SillyGooseRegistryKeys.GOOSE_VARIANT).ifPresent(this::setVariant);
+            VariantUtils.readVariant(view, SillyGooseRegistryKeys.GOOSE_VARIANT).ifPresent(this::setVariant);
         }
 
-        boolean savedPreference = view.getBoolean("PrefersWater", this.random.nextBoolean());
+        boolean savedPreference = view.getBooleanOr("PrefersWater", this.random.nextBoolean());
         this.setPrefersWater(savedPreference);
 
-        boolean canPickup = view.getBoolean("CanPickUpLoot", false);
+        boolean canPickup = view.getBooleanOr("CanPickUpLoot", false);
         this.setCanPickUpLoot(canPickup);
-        this.preferenceChangeTimer = view.getInt("PreferenceChangeTimer", 0);
-        this.offPreferenceTimer = view.getInt("OffPreferenceTimer", 0);
-        this.isInOffPreferenceMode = view.getBoolean("IsInOffPreferenceMode", false);
-        this.eggLayTimer = view.getInt("EggLayTimer", 0);
-        this.swordPickupCooldownTimer = view.getInt("SwordPickupCooldownTimer", 0);
-        this.babyPanicTimer = view.getInt("BabyPanicTimer", 0);
+        this.preferenceChangeTimer = view.getIntOr("PreferenceChangeTimer", 0);
+        this.offPreferenceTimer = view.getIntOr("OffPreferenceTimer", 0);
+        this.isInOffPreferenceMode = view.getBooleanOr("IsInOffPreferenceMode", false);
+        this.eggLayTimer = view.getIntOr("EggLayTimer", 0);
+        this.swordPickupCooldownTimer = view.getIntOr("SwordPickupCooldownTimer", 0);
+        this.babyPanicTimer = view.getIntOr("BabyPanicTimer", 0);
 
-        view.read("RevengeTargetUUID", Uuids.CODEC).ifPresent(uuid -> this.revengeTargetUUID = uuid);
-        this.revengeTimer = view.getInt("RevengeTimer", 0);
-        this.revengeExpirationTime = view.getLong("RevengeExpirationTime", 0L);
+        view.read("RevengeTargetUUID", UUIDUtil.AUTHLIB_CODEC).ifPresent(uuid -> this.revengeTargetUUID = uuid);
+        this.revengeTimer = view.getIntOr("RevengeTimer", 0);
+        this.revengeExpirationTime = view.getLongOr("RevengeExpirationTime", 0L);
     }
 
     private boolean spawnedFromEgg = false;
@@ -189,16 +203,92 @@ public class GooseEntity extends AnimalEntity {
     @Override
     public void tick() {
         super.tick();
-        if (this.getEntityWorld().isClient()) {
-            setupAnimationStates();
-        } else {
-            handleWaterFloating();
-            handlePreferenceChange();
-            handleOffPreferenceTimer();
-            handleEggLaying();
-            handleRevengeTimer();
-            handleSwordPickupCooldown();
-            handleBabyPanic();
+
+        if (this.level().isClientSide()) {
+            if (this.isBaby()) {
+                this.idleAnimationState.stop();
+                this.idleWaterAnimationState.stop();
+                this.walkAnimationState.stop();
+                this.runAnimationState.stop();
+                this.swimAnimationState.stop();
+                this.swimFastAnimationState.stop();
+
+                boolean isMoving = this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-6D;
+
+                this.babyIdleAnimationState.animateWhen(!this.isInWater() && !this.isPanicking() && !isMoving, this.tickCount);
+
+                if (this.isInWater()) {
+                    this.babyIdleWaterAnimationState.animateWhen(!this.isPanicking() && !isMoving, this.tickCount);
+
+                    if (isMoving) {
+                        if (this.isPanicking()) {
+                            this.babySwimFastAnimationState.startIfStopped(this.tickCount);
+                            this.babySwimAnimationState.stop();
+                        } else {
+                            this.babySwimAnimationState.startIfStopped(this.tickCount);
+                            this.babySwimFastAnimationState.stop();
+                        }
+                    } else {
+                        this.babySwimAnimationState.stop();
+                        this.babySwimFastAnimationState.stop();
+                    }
+                } else {
+                    this.babyIdleWaterAnimationState.stop();
+                    if (isMoving) {
+                        if (this.isPanicking()) {
+                            this.babyRunAnimationState.startIfStopped(this.tickCount);
+                            this.babyWalkAnimationState.stop();
+                        } else {
+                            this.babyWalkAnimationState.startIfStopped(this.tickCount);
+                            this.babyRunAnimationState.stop();
+                        }
+                    } else {
+                        this.babyWalkAnimationState.stop();
+                        this.babyRunAnimationState.stop();
+                    }
+                }
+            } else {
+                this.babyIdleAnimationState.stop();
+                this.babyIdleWaterAnimationState.stop();
+                this.babyWalkAnimationState.stop();
+                this.babyRunAnimationState.stop();
+                this.babySwimAnimationState.stop();
+                this.babySwimFastAnimationState.stop();
+
+                boolean isMoving = this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-6D;
+
+                this.idleAnimationState.animateWhen(!this.isInWater() && !this.isPanicking() && !isMoving, this.tickCount);
+
+                if (this.isInWater()) {
+                    this.idleWaterAnimationState.animateWhen(!this.isPanicking() && !isMoving, this.tickCount);
+                    if (isMoving) {
+                        if (this.isPanicking()) {
+                            this.swimFastAnimationState.startIfStopped(this.tickCount);
+                            this.swimAnimationState.stop();
+                        } else {
+                            this.swimAnimationState.startIfStopped(this.tickCount);
+                            this.swimFastAnimationState.stop();
+                        }
+                    } else {
+                        this.swimAnimationState.stop();
+                        this.swimFastAnimationState.stop();
+                    }
+                } else {
+                    this.idleWaterAnimationState.stop();
+                    if (isMoving) {
+                        if (this.isPanicking()) {
+                            this.runAnimationState.startIfStopped(this.tickCount);
+                            this.walkAnimationState.stop();
+                        } else {
+                            this.walkAnimationState.startIfStopped(this.tickCount);
+                            this.runAnimationState.stop();
+                        }
+                    } else {
+                        this.walkAnimationState.stop();
+                        this.runAnimationState.stop();
+                    }
+                }
+            }
         }
     }
 
@@ -215,9 +305,9 @@ public class GooseEntity extends AnimalEntity {
             return;
         }
 
-        PlayerEntity targetPlayer = getRevengeTargetPlayer();
+        Player targetPlayer = getRevengeTargetPlayer();
         if (targetPlayer != null) {
-            double distance = this.squaredDistanceTo(targetPlayer);
+            double distance = this.distanceToSqr(targetPlayer);
 
             if (distance <= 32.0 * 32.0) {
                 if (revengeTimer > 0) {
@@ -238,8 +328,8 @@ public class GooseEntity extends AnimalEntity {
     }
 
     @Override
-    public float getMovementSpeed() {
-        float baseSpeed = super.getMovementSpeed();
+    public float getSpeed() {
+        float baseSpeed = super.getSpeed();
         if (isInPanicMode()) {
             return (float)(baseSpeed * BABY_PANIC_SPEED_MULTIPLIER);
         }
@@ -247,19 +337,19 @@ public class GooseEntity extends AnimalEntity {
     }
 
     @Override
-    public boolean damage(ServerWorld world, DamageSource source, float amount) {
-        boolean damaged = super.damage(world, source, amount);
+    public boolean hurtServer(ServerLevel world, DamageSource source, float amount) {
+        boolean damaged = super.hurtServer(world, source, amount);
 
         if (!damaged) {
             return false;
         }
 
-        Entity attacker = source.getAttacker();
-        if (this.isBaby() && attacker instanceof PlayerEntity player) {
+        Entity attacker = source.getEntity();
+        if (this.isBaby() && attacker instanceof Player player) {
             this.getNavigation().stop();
-            this.getJumpControl().setActive();
-            this.getLookControl().lookAt(player, 180.0F, 180.0F);
-            this.getMoveControl().moveTo(
+            this.getJumpControl().jump();
+            this.getLookControl().setLookAt(player, 180.0F, 180.0F);
+            this.getMoveControl().setWantedPosition(
                     this.getX() + (this.random.nextDouble() - 0.5) * 4.0,
                     this.getY(),
                     this.getZ() + (this.random.nextDouble() - 0.5) * 4.0,
@@ -271,17 +361,17 @@ public class GooseEntity extends AnimalEntity {
 
             alertAdultsOfBabyAttack(player);
         }
-        if (damaged && this.isDead() && attacker instanceof PlayerEntity player) {
+        if (damaged && this.isDeadOrDying() && attacker instanceof Player player) {
             notifyNearbyGeese(player);
         }
 
         return damaged;
     }
 
-    private void alertAdultsOfBabyAttack(PlayerEntity attacker) {
-        Box box = this.getBoundingBox().expand(REVENGE_NOTIFICATION_RADIUS);
+    private void alertAdultsOfBabyAttack(Player attacker) {
+        AABB box = this.getBoundingBox().inflate(REVENGE_NOTIFICATION_RADIUS);
 
-        List<GooseEntity> adults = this.getEntityWorld().getEntitiesByClass(
+        List<GooseEntity> adults = this.level().getEntitiesOfClass(
                 GooseEntity.class,
                 box,
                 goose -> goose != this && goose.isAlive() && !goose.isBaby()
@@ -292,9 +382,9 @@ public class GooseEntity extends AnimalEntity {
         }
     }
 
-    private void notifyNearbyGeese(PlayerEntity killer) {
-        Box searchBox = this.getBoundingBox().expand(REVENGE_NOTIFICATION_RADIUS);
-        List<GooseEntity> nearbyGeese = this.getEntityWorld().getEntitiesByClass(
+    private void notifyNearbyGeese(Player killer) {
+        AABB searchBox = this.getBoundingBox().inflate(REVENGE_NOTIFICATION_RADIUS);
+        List<GooseEntity> nearbyGeese = this.level().getEntitiesOfClass(
                 GooseEntity.class,
                 searchBox,
                 g -> g != this && g.isAlive()
@@ -305,8 +395,8 @@ public class GooseEntity extends AnimalEntity {
         }
     }
 
-    public void setRevengeTarget(PlayerEntity player) {
-        this.revengeTargetUUID = player.getUuid();
+    public void setRevengeTarget(Player player) {
+        this.revengeTargetUUID = player.getUUID();
         this.revengeTimer = MIN_REVENGE_TIMER + this.random.nextInt(MAX_REVENGE_TIMER - MIN_REVENGE_TIMER);
 
         long durationMs = MIN_REVENGE_DURATION_MS +
@@ -336,13 +426,13 @@ public class GooseEntity extends AnimalEntity {
     }
 
     @Nullable
-    public PlayerEntity getRevengeTargetPlayer() {
+    public Player getRevengeTargetPlayer() {
         if (revengeTargetUUID == null) {
             return null;
         }
 
-        if (this.getEntityWorld() instanceof ServerWorld serverWorld) {
-            return serverWorld.getPlayerByUuid(revengeTargetUUID);
+        if (this.level() instanceof ServerLevel serverWorld) {
+            return serverWorld.getPlayerByUUID(revengeTargetUUID);
         }
 
         return null;
@@ -368,45 +458,45 @@ public class GooseEntity extends AnimalEntity {
 
         if (!eggStack.isEmpty()) {
             ItemEntity eggEntity = new ItemEntity(
-                    this.getEntityWorld(),
+                    this.level(),
                     this.getX(),
                     this.getY(),
                     this.getZ(),
                     eggStack
             );
 
-            eggEntity.setVelocity(0, 0.05, 0);
+            eggEntity.setDeltaMovement(0, 0.05, 0);
 
-            this.getEntityWorld().spawnEntity(eggEntity);
+            this.level().addFreshEntity(eggEntity);
 
-            this.playSound(SoundEvents.ENTITY_CHICKEN_EGG, 0.5F, (this.random.nextFloat() - this.random.nextFloat()) * 0.2F + 1.0F);
+            this.playSound(SoundEvents.CHICKEN_EGG, 0.5F, (this.random.nextFloat() - this.random.nextFloat()) * 0.2F + 1.0F);
         }
     }
 
     private ItemStack getEggForVariant() {
-        RegistryEntry<GooseVariant> variant = this.getVariant();
+        Holder<GooseVariant> variant = this.getVariant();
 
-        if (variant.matchesKey(GooseVariants.TEMPERATE)) {
+        if (variant.is(GooseVariants.TEMPERATE)) {
             return new ItemStack(SillyGooseItems.WHITE_EGG);
-        } else if (variant.matchesKey(GooseVariants.COLD)) {
+        } else if (variant.is(GooseVariants.COLD)) {
             return new ItemStack(SillyGooseItems.BIG_WHITE_EGG);
-        } else if (variant.matchesKey(GooseVariants.WARM)) {
+        } else if (variant.is(GooseVariants.WARM)) {
             return new ItemStack(SillyGooseItems.SMALL_WHITE_EGG);
         }
 
         return new ItemStack(SillyGooseItems.WHITE_EGG);
     }
 
-    public static boolean canSpawn(EntityType<GooseEntity> type, ServerWorldAccess world, SpawnReason spawnReason, BlockPos pos, net.minecraft.util.math.random.Random random) {
-        if (!AnimalEntity.isValidNaturalSpawn(type, world, spawnReason, pos, random)) {
+    public static boolean canSpawn(EntityType<GooseEntity> type, ServerLevelAccessor world, EntitySpawnReason spawnReason, BlockPos pos, net.minecraft.util.RandomSource random) {
+        if (!Animal.checkAnimalSpawnRules(type, world, spawnReason, pos, random)) {
             return false;
         }
 
         return hasWaterNearby(world, pos, 12, 5);
     }
 
-    private static boolean hasWaterNearby(ServerWorldAccess world, BlockPos center, int horizontalRadius, int verticalRange) {
-        BlockPos.Mutable mutable = new BlockPos.Mutable();
+    private static boolean hasWaterNearby(ServerLevelAccessor world, BlockPos center, int horizontalRadius, int verticalRange) {
+        BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
         int waterBlocksFound = 0;
         int requiredWaterBlocks = 6;
 
@@ -415,16 +505,16 @@ public class GooseEntity extends AnimalEntity {
                 for (int y = -verticalRange; y <= verticalRange; y++) {
                     mutable.set(center.getX() + x, center.getY() + y, center.getZ() + z);
 
-                    if (world.getFluidState(mutable).isIn(FluidTags.WATER)) {
+                    if (world.getFluidState(mutable).is(FluidTags.WATER)) {
                         waterBlocksFound++;
 
                         if (waterBlocksFound >= requiredWaterBlocks) {
                             return true;
                         }
                     }
-                    else if (world.getBlockState(mutable).isIn(BlockTags.ICE)) {
-                        BlockPos below = mutable.down();
-                        if (world.getFluidState(below).isIn(FluidTags.WATER)) {
+                    else if (world.getBlockState(mutable).is(BlockTags.ICE)) {
+                        BlockPos below = mutable.below();
+                        if (world.getFluidState(below).is(FluidTags.WATER)) {
                             waterBlocksFound++;
 
                             if (waterBlocksFound >= requiredWaterBlocks) {
@@ -454,6 +544,11 @@ public class GooseEntity extends AnimalEntity {
         return SillyGooseSounds.GOOSE_HONK;
     }
 
+    @Override
+    public EntityDimensions getDefaultDimensions(final Pose pose) {
+        return this.isBaby() ? BABY_DIMENSIONS : super.getDefaultDimensions(pose);
+    }
+
     private void handlePreferenceChange() {
         if (this.isBaby()) {
             return;
@@ -472,7 +567,7 @@ public class GooseEntity extends AnimalEntity {
 
     private void handleOffPreferenceTimer() {
         boolean prefersWater = this.getPrefersWater();
-        boolean inWater = this.isTouchingWater();
+        boolean inWater = this.isInWater();
         boolean inOffPreferenceZone = (prefersWater && !inWater) || (!prefersWater && inWater);
 
         if (inOffPreferenceZone) {
@@ -494,30 +589,30 @@ public class GooseEntity extends AnimalEntity {
     }
 
     private void handleWaterFloating() {
-        if (!this.isTouchingWater() || this.hasVehicle()) {
+        if (!this.isInWater() || this.isPassenger()) {
             return;
         }
 
-        BlockPos pos = this.getBlockPos();
+        BlockPos pos = this.blockPosition();
 
         double entityHeight = this.isBaby() ? 1.375 * 0.7 : 1.375;
         int topBlockOffset = (int) Math.ceil(entityHeight);
-        BlockPos airCheckPos = pos.up(topBlockOffset);
+        BlockPos airCheckPos = pos.above(topBlockOffset);
 
-        boolean hasAirAbove = !this.getEntityWorld().getFluidState(airCheckPos).isIn(FluidTags.WATER) &&
-                this.getEntityWorld().getBlockState(airCheckPos).isAir();
+        boolean hasAirAbove = !this.level().getFluidState(airCheckPos).is(FluidTags.WATER) &&
+                this.level().getBlockState(airCheckPos).isAir();
 
         if (!hasAirAbove) {
-            Vec3d velocity = this.getVelocity();
+            Vec3 velocity = this.getDeltaMovement();
             double surfaceBoost = this.isBaby() ? 0.12 : 0.10;
-            this.setVelocity(velocity.x, surfaceBoost, velocity.z);
-            this.velocityDirty = true;
+            this.setDeltaMovement(velocity.x, surfaceBoost, velocity.z);
+            this.needsSync = true;
             return;
         }
 
         double waterSurfaceY = pos.getY() + 1.0;
         BlockPos checkPos = new BlockPos((int)this.getX(), (int)waterSurfaceY, (int)this.getZ());
-        while (this.getEntityWorld().getFluidState(checkPos).isIn(FluidTags.WATER)) {
+        while (this.level().getFluidState(checkPos).is(FluidTags.WATER)) {
             waterSurfaceY += 1.0;
             checkPos = new BlockPos((int)this.getX(), (int)waterSurfaceY, (int)this.getZ());
         }
@@ -527,7 +622,7 @@ public class GooseEntity extends AnimalEntity {
         double currentY = this.getY();
         double yDiff = targetY - currentY;
 
-        Vec3d velocity = this.getVelocity();
+        Vec3 velocity = this.getDeltaMovement();
         boolean isSwimming = Math.abs(velocity.x) > 0.02 || Math.abs(velocity.z) > 0.02;
 
         if (isSwimming) {
@@ -537,14 +632,14 @@ public class GooseEntity extends AnimalEntity {
             };
 
             for (BlockPos landCheck : checkPositions) {
-                if (!this.getEntityWorld().getFluidState(landCheck).isIn(FluidTags.WATER) &&
-                        this.getEntityWorld().getBlockState(landCheck).isSolidBlock(this.getEntityWorld(), landCheck)) {
+                if (!this.level().getFluidState(landCheck).is(FluidTags.WATER) &&
+                        this.level().getBlockState(landCheck).isRedstoneConductor(this.level(), landCheck)) {
                     nearLand = true;
                     break;
                 }
-                BlockPos upOne = landCheck.up();
-                if (!this.getEntityWorld().getFluidState(upOne).isIn(FluidTags.WATER) &&
-                        this.getEntityWorld().getBlockState(upOne).isSolidBlock(this.getEntityWorld(), upOne)) {
+                BlockPos upOne = landCheck.above();
+                if (!this.level().getFluidState(upOne).is(FluidTags.WATER) &&
+                        this.level().getBlockState(upOne).isRedstoneConductor(this.level(), upOne)) {
                     nearLand = true;
                     break;
                 }
@@ -552,13 +647,13 @@ public class GooseEntity extends AnimalEntity {
 
             if (nearLand) {
                 double boostStrength = this.isBaby() ? 0.15 : 0.14;
-                this.setVelocity(velocity.x, Math.max(velocity.y, boostStrength), velocity.z);
-                this.velocityDirty = true;
+                this.setDeltaMovement(velocity.x, Math.max(velocity.y, boostStrength), velocity.z);
+                this.needsSync = true;
                 return;
             }
         }
 
-        if (!this.isOnGround() && Math.abs(yDiff) < 2.0) {
+        if (!this.onGround() && Math.abs(yDiff) < 2.0) {
             double newYVelocity;
 
             if (yDiff > 0.1) {
@@ -573,14 +668,14 @@ public class GooseEntity extends AnimalEntity {
                 newYVelocity = velocity.y * 0.8 + newYVelocity * 0.2;
             }
 
-            this.setVelocity(velocity.x, newYVelocity, velocity.z);
-            this.velocityDirty = true;
+            this.setDeltaMovement(velocity.x, newYVelocity, velocity.z);
+            this.needsSync = true;
         }
     }
 
     private void setupAnimationStates() {
-        boolean inWater = this.isTouchingWater();
-        boolean isMovingHorizontally = this.getVelocity().horizontalLengthSquared() > 0.001;
+        boolean inWater = this.isInWater();
+        boolean isMovingHorizontally = this.getDeltaMovement().horizontalDistanceSqr() > 0.001;
         boolean isInHitAndRun = this.isInHitAndRunMode();
         boolean isRunning = isMovingHorizontally && isInHitAndRun;
 
@@ -609,7 +704,7 @@ public class GooseEntity extends AnimalEntity {
                 }
             }
 
-            if (targetAnimation != null && !targetAnimation.isRunning()) {
+            if (targetAnimation != null && !targetAnimation.isStarted()) {
                 this.idleAnimationState.stop();
                 this.idleWaterAnimationState.stop();
                 this.walkAnimationState.stop();
@@ -618,7 +713,7 @@ public class GooseEntity extends AnimalEntity {
                 this.swimFastAnimationState.stop();
                 this.wingsUpIdleAnimationState.stop();
 
-                targetAnimation.start(this.age);
+                targetAnimation.start(this.tickCount);
             }
         } else {
             --this.idleAnimationTimeout;
@@ -626,45 +721,45 @@ public class GooseEntity extends AnimalEntity {
     }
 
     public boolean isInHitAndRunMode() {
-        return this.dataTracker.get(IS_IN_HIT_AND_RUN_MODE);
+        return this.entityData.get(IS_IN_HIT_AND_RUN_MODE);
     }
 
     public void setInHitAndRunMode(boolean inMode) {
-        this.dataTracker.set(IS_IN_HIT_AND_RUN_MODE, inMode);
+        this.entityData.set(IS_IN_HIT_AND_RUN_MODE, inMode);
     }
 
     @Override
-    public boolean canPickupItem(ItemStack stack) {
+    public boolean canHoldItem(ItemStack stack) {
         if (this.isBaby()) {
             return false;
         }
 
-        EquipmentSlot equipmentSlot = this.getPreferredEquipmentSlot(stack);
-        if (!this.getEquippedStack(equipmentSlot).isEmpty()) {
+        EquipmentSlot equipmentSlot = this.getEquipmentSlotForItem(stack);
+        if (!this.getItemBySlot(equipmentSlot).isEmpty()) {
             return false;
         }
         return equipmentSlot == EquipmentSlot.MAINHAND &&
-                stack.isIn(ItemTags.SWORDS) &&
+                stack.is(ItemTags.SWORDS) &&
                 this.canPickUpLoot();
     }
 
     @Override
     public boolean canPickUpLoot() {
-        return this.dataTracker.get(CAN_PICKUP_LOOT);
+        return this.entityData.get(CAN_PICKUP_LOOT);
     }
 
     public void setCanPickUpLoot(boolean canPickUpLoot) {
-        this.dataTracker.set(CAN_PICKUP_LOOT, canPickUpLoot);
+        this.entityData.set(CAN_PICKUP_LOOT, canPickUpLoot);
     }
 
     @Override
-    protected void loot(ServerWorld world, ItemEntity itemEntity) {
-        ItemStack stack = itemEntity.getStack();
-        if (this.canPickupItem(stack)) {
-            this.triggerItemPickedUpByEntityCriteria(itemEntity);
-            this.equipStack(EquipmentSlot.MAINHAND, stack.split(1));
-            this.setEquipmentDropChance(EquipmentSlot.MAINHAND, 2.0F);
-            this.sendPickup(itemEntity, stack.getCount());
+    protected void pickUpItem(ServerLevel world, ItemEntity itemEntity) {
+        ItemStack stack = itemEntity.getItem();
+        if (this.canHoldItem(stack)) {
+            this.onItemPickup(itemEntity);
+            this.setItemSlot(EquipmentSlot.MAINHAND, stack.split(1));
+            this.setDropChance(EquipmentSlot.MAINHAND, 2.0F);
+            this.take(itemEntity, stack.getCount());
             if (stack.isEmpty()) {
                 itemEntity.discard();
             }
@@ -672,40 +767,40 @@ public class GooseEntity extends AnimalEntity {
     }
 
     @Override
-    public ActionResult interactMob(PlayerEntity player, Hand hand) {
-        ItemStack stackInHand = player.getStackInHand(hand);
-        if (stackInHand.isIn(ItemTags.CHICKEN_FOOD) &&
-                !this.getEquippedStack(EquipmentSlot.MAINHAND).isEmpty() &&
-                this.getEquippedStack(EquipmentSlot.MAINHAND).isIn(ItemTags.SWORDS)) {
+    public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        ItemStack stackInHand = player.getItemInHand(hand);
+        if (stackInHand.is(ItemTags.CHICKEN_FOOD) &&
+                !this.getItemBySlot(EquipmentSlot.MAINHAND).isEmpty() &&
+                this.getItemBySlot(EquipmentSlot.MAINHAND).is(ItemTags.SWORDS)) {
 
-            if (!this.getEntityWorld().isClient()) {
-                ItemStack sword = this.getEquippedStack(EquipmentSlot.MAINHAND).copy();
+            if (!this.level().isClientSide()) {
+                ItemStack sword = this.getItemBySlot(EquipmentSlot.MAINHAND).copy();
                 ItemEntity itemEntity = new ItemEntity(
-                        this.getEntityWorld(),
+                        this.level(),
                         this.getX(),
                         this.getY() + 0.5,
                         this.getZ(),
                         sword
                 );
-                this.getEntityWorld().spawnEntity(itemEntity);
-                this.equipStack(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+                this.level().addFreshEntity(itemEntity);
+                this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
 
                 this.setCanPickUpLoot(false);
                 this.swordPickupCooldownTimer = 400;
-                if (!player.getAbilities().creativeMode) {
-                    stackInHand.decrement(1);
+                if (!player.getAbilities().instabuild) {
+                    stackInHand.shrink(1);
                 }
 
-                if (player instanceof ServerPlayerEntity serverPlayer) {
+                if (player instanceof ServerPlayer serverPlayer) {
                     UnfairTradeAdvancementHandler.grantUnfairTradeAdvancement(serverPlayer);
                 }
-                this.playSound(SoundEvents.ENTITY_GENERIC_EAT.value(), 1.0F, 1.0F);
+                this.playSound(SoundEvents.GENERIC_EAT.value(), 1.0F, 1.0F);
             }
 
-            return ActionResult.SUCCESS;
+            return InteractionResult.SUCCESS;
         }
 
-        return super.interactMob(player, hand);
+        return super.mobInteract(player, hand);
     }
 
     private void handleSwordPickupCooldown() {
@@ -719,8 +814,8 @@ public class GooseEntity extends AnimalEntity {
     }
 
     @Nullable
-    public GooseEntity createChild(ServerWorld serverWorld, PassiveEntity passiveEntity) {
-        GooseEntity gooseEntity = (GooseEntity)SillyGooseEntities.GOOSE.create(serverWorld, SpawnReason.BREEDING);
+    public GooseEntity getBreedOffspring(ServerLevel serverWorld, AgeableMob passiveEntity) {
+        GooseEntity gooseEntity = (GooseEntity)SillyGooseEntities.GOOSE.create(serverWorld, EntitySpawnReason.BREEDING);
         if (gooseEntity != null && passiveEntity instanceof GooseEntity gooseEntity2) {
             gooseEntity.setVariant(this.random.nextBoolean() ? this.getVariant() : gooseEntity2.getVariant());
             gooseEntity.setPrefersWater(this.getPrefersWater());
@@ -730,9 +825,9 @@ public class GooseEntity extends AnimalEntity {
     }
 
     @Override
-    public EntityData initialize(ServerWorldAccess world, LocalDifficulty difficulty, SpawnReason spawnReason, @Nullable EntityData entityData) {
-        if (spawnReason != SpawnReason.TRIGGERED && spawnReason != SpawnReason.BREEDING && spawnReason != SpawnReason.COMMAND) {
-            Variants.select(SpawnContext.of(world, this.getBlockPos()), SillyGooseRegistryKeys.GOOSE_VARIANT)
+    public SpawnGroupData finalizeSpawn(ServerLevelAccessor world, DifficultyInstance difficulty, EntitySpawnReason spawnReason, @Nullable SpawnGroupData entityData) {
+        if (spawnReason != EntitySpawnReason.TRIGGERED && spawnReason != EntitySpawnReason.BREEDING && spawnReason != EntitySpawnReason.COMMAND) {
+            VariantUtils.selectVariantToSpawn(SpawnContext.create(world, this.blockPosition()), SillyGooseRegistryKeys.GOOSE_VARIANT)
                     .ifPresent(this::setVariant);
         }
 
@@ -745,7 +840,7 @@ public class GooseEntity extends AnimalEntity {
             this.eggLayTimer = MIN_EGG_LAY_TIME +
                     this.random.nextInt(MAX_EGG_LAY_TIME - MIN_EGG_LAY_TIME);
 
-            if (spawnReason == SpawnReason.NATURAL && this.random.nextFloat() < 0.3F) {
+            if (spawnReason == EntitySpawnReason.NATURAL && this.random.nextFloat() < 0.3F) {
                 entityData = new GooseGroupData(true);
             }
 
@@ -761,9 +856,9 @@ public class GooseEntity extends AnimalEntity {
                 }
                 int maxDamage = spawnSword.getMaxDamage();
                 int damage = this.random.nextInt((int)(maxDamage * 0.25F) + 1);
-                spawnSword.setDamage(damage);
-                this.equipStack(EquipmentSlot.MAINHAND, spawnSword);
-                this.setEquipmentDropChance(EquipmentSlot.MAINHAND, 2.0F);
+                spawnSword.setDamageValue(damage);
+                this.setItemSlot(EquipmentSlot.MAINHAND, spawnSword);
+                this.setDropChance(EquipmentSlot.MAINHAND, 2.0F);
             }
         }
 
@@ -771,7 +866,7 @@ public class GooseEntity extends AnimalEntity {
             int babyCount = 1 + this.random.nextInt(3);
 
             for (int i = 0; i < babyCount; i++) {
-                GooseEntity baby = (GooseEntity) SillyGooseEntities.GOOSE.create(world.toServerWorld(), SpawnReason.NATURAL);
+                GooseEntity baby = (GooseEntity) SillyGooseEntities.GOOSE.create(world.getLevel(), EntitySpawnReason.NATURAL);
                 if (baby != null) {
                     baby.setBaby(true);
                     baby.setVariant(this.getVariant());
@@ -779,7 +874,7 @@ public class GooseEntity extends AnimalEntity {
 
                     double offsetX = this.random.nextGaussian() * 0.5;
                     double offsetZ = this.random.nextGaussian() * 0.5;
-                    baby.refreshPositionAndAngles(
+                    baby.snapTo(
                             this.getX() + offsetX,
                             this.getY(),
                             this.getZ() + offsetZ,
@@ -787,16 +882,16 @@ public class GooseEntity extends AnimalEntity {
                             0.0F
                     );
 
-                    world.spawnEntity(baby);
+                    world.addFreshEntity(baby);
                 }
             }
         }
 
-        return super.initialize(world, difficulty, spawnReason, entityData);
+        return super.finalizeSpawn(world, difficulty, spawnReason, entityData);
     }
 
 
-    public static class GooseGroupData implements EntityData {
+    public static class GooseGroupData implements SpawnGroupData {
         private final boolean shouldSpawnBabies;
 
         public GooseGroupData(boolean shouldSpawnBabies) {
@@ -809,8 +904,8 @@ public class GooseEntity extends AnimalEntity {
     }
 
     @Override
-    public void onGrowUp() {
-        super.onGrowUp();
+    public void ageBoundaryReached() {
+        super.ageBoundaryReached();
         if (this.preferenceChangeTimer == 0) {
             this.preferenceChangeTimer = MIN_PREFERENCE_CHANGE_TIME +
                     this.random.nextInt(MAX_PREFERENCE_CHANGE_TIME - MIN_PREFERENCE_CHANGE_TIME);
@@ -822,59 +917,60 @@ public class GooseEntity extends AnimalEntity {
         }
     }
 
-    public void setVariant(RegistryEntry<GooseVariant> variant) {
-        this.dataTracker.set(VARIANT, variant);
+    public void setVariant(Holder<GooseVariant> variant) {
+        this.entityData.set(VARIANT, variant);
     }
 
-    public RegistryEntry<GooseVariant> getVariant() {
-        return (RegistryEntry)this.dataTracker.get(VARIANT);
+    public Holder<GooseVariant> getVariant() {
+        return (Holder)this.entityData.get(VARIANT);
     }
 
     public boolean getPrefersWater() {
-        return this.dataTracker.get(PREFERS_WATER);
+        return this.entityData.get(PREFERS_WATER);
     }
 
     public void setPrefersWater(boolean prefersWater) {
-        this.dataTracker.set(PREFERS_WATER, prefersWater);
+        this.entityData.set(PREFERS_WATER, prefersWater);
     }
 
     @Nullable
-    public <T> T get(ComponentType<? extends T> type) {
+    @Override
+    public <T> T get(DataComponentType<? extends T> type) {
         return type == SillyGooseDataComponentTypes.GOOSE_VARIANT
-                ? castComponentValue(type, new LazyRegistryEntryReference<>(this.getVariant()))
+                ? castComponentValue(type, this.getVariant())
                 : super.get(type);
     }
 
-    protected void copyComponentsFrom(ComponentsAccess from) {
-        this.copyComponentFrom(from, SillyGooseDataComponentTypes.GOOSE_VARIANT);
-        super.copyComponentsFrom(from);
+    protected void applyImplicitComponents(final DataComponentGetter components) {
+        this.applyImplicitComponentIfPresent(components, SillyGooseDataComponentTypes.GOOSE_VARIANT);
+        super.applyImplicitComponents(components);
     }
 
     @Override
-    public float getScaleFactor() {
+    public float getAgeScale() {
         return this.isBaby() ? 0.7F : 1.0F;
     }
 
-    protected <T> boolean setApplicableComponent(ComponentType<T> type, T value) {
+    @Override
+    protected <T> boolean applyImplicitComponent(DataComponentType<T> type, T value) {
         if (type == SillyGooseDataComponentTypes.GOOSE_VARIANT) {
-            LazyRegistryEntryReference<GooseVariant> lazyRef = (LazyRegistryEntryReference<GooseVariant>) castComponentValue(SillyGooseDataComponentTypes.GOOSE_VARIANT, value);
-            lazyRef.resolveEntry(this.getRegistryManager()).ifPresent(this::setVariant);
+            this.setVariant((Holder<GooseVariant>) value);
             return true;
         } else {
-            return super.setApplicableComponent(type, value);
+            return super.applyImplicitComponent(type, value);
         }
     }
 
     @Override
-    public boolean isBreedingItem(ItemStack stack) {
-        return stack.isIn(ItemTags.CHICKEN_FOOD);
+    public boolean isFood(ItemStack stack) {
+        return stack.is(ItemTags.CHICKEN_FOOD);
     }
 
     static {
-        VARIANT = DataTracker.registerData(GooseEntity.class, SillyGooseTrackedDataHandlerRegistry.GOOSE_VARIANT);
-        PREFERS_WATER = DataTracker.registerData(GooseEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
-        CAN_PICKUP_LOOT = DataTracker.registerData(GooseEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
-        IS_IN_HIT_AND_RUN_MODE = DataTracker.registerData(GooseEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+        VARIANT = SynchedEntityData.defineId(GooseEntity.class, SillyGooseTrackedDataHandlerRegistry.GOOSE_VARIANT);
+        PREFERS_WATER = SynchedEntityData.defineId(GooseEntity.class, EntityDataSerializers.BOOLEAN);
+        CAN_PICKUP_LOOT = SynchedEntityData.defineId(GooseEntity.class, EntityDataSerializers.BOOLEAN);
+        IS_IN_HIT_AND_RUN_MODE = SynchedEntityData.defineId(GooseEntity.class, EntityDataSerializers.BOOLEAN);
     }
 
 

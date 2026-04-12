@@ -1,9 +1,9 @@
 package potatowolfie.silly_goose.sound;
 
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvent;
 import potatowolfie.silly_goose.SillyGoose;
 
 public class SillyGooseSounds {
@@ -13,8 +13,8 @@ public class SillyGooseSounds {
     public static final SoundEvent GOOSE_HURT = registerSoundEvent("goose_hurt");
 
     private static SoundEvent registerSoundEvent(String name) {
-        return Registry.register(Registries.SOUND_EVENT, Identifier.of(SillyGoose.MOD_ID, name),
-                SoundEvent.of(Identifier.of(SillyGoose.MOD_ID, name)));
+        return Registry.register(BuiltInRegistries.SOUND_EVENT, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, name),
+                SoundEvent.createVariableRangeEvent(Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, name)));
     }
 
     public static void registerSounds() {

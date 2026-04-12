@@ -1,18 +1,18 @@
 package potatowolfie.silly_goose.entity.goose.goals;
 
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import org.jetbrains.annotations.Nullable;
 import potatowolfie.silly_goose.entity.goose.GooseEntity;
 
 import java.util.EnumSet;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.phys.Vec3;
 
 public class GooseWanderGoal extends Goal {
     private final GooseEntity goose;
     private final double speed;
 
-    private Vec3d targetPos = null;
+    private Vec3 targetPos = null;
     private int navigationTimeout = 0;
     private int stuckCheckTimer = 0;
     private BlockPos lastPos = null;
@@ -45,16 +45,16 @@ public class GooseWanderGoal extends Goal {
     public GooseWanderGoal(GooseEntity goose, double speed) {
         this.goose = goose;
         this.speed = speed;
-        this.setControls(EnumSet.of(Goal.Control.MOVE));
+        this.setFlags(EnumSet.of(Flag.MOVE));
     }
 
     @Override
-    public boolean canStart() {
+    public boolean canUse() {
         if (this.goose.isBaby()) {
             return false;
         }
 
-        if (this.goose.hasVehicle()) {
+        if (this.goose.isPassenger()) {
             return false;
         }
 
@@ -62,8 +62,8 @@ public class GooseWanderGoal extends Goal {
     }
 
     @Override
-    public boolean shouldContinue() {
-        return canStart();
+    public boolean canContinueToUse() {
+        return canUse();
     }
 
     @Override
@@ -93,7 +93,7 @@ public class GooseWanderGoal extends Goal {
             stuckCheckTimer = STUCK_CHECK_INTERVAL;
         }
 
-        if (goose.isTouchingWater()) {
+        if (goose.isInWater()) {
             if (!useDirectSwimming && targetPos != null) {
                 useDirectSwimming = true;
                 goose.getNavigation().stop();
@@ -105,7 +105,7 @@ public class GooseWanderGoal extends Goal {
         }
 
         if (nearestWaterPos != null) {
-            double distanceToWater = goose.getBlockPos().getSquaredDistance(nearestWaterPos);
+            double distanceToWater = goose.blockPosition().distSqr(nearestWaterPos);
 
             if (distanceToWater > 256.0) {
                 currentMode = MovementMode.RETURNING;
@@ -141,7 +141,7 @@ public class GooseWanderGoal extends Goal {
         if (targetPos != null) {
             navigationTimeout--;
 
-            double distanceToTarget = goose.getEntityPos().distanceTo(targetPos);
+            double distanceToTarget = goose.position().distanceTo(targetPos);
             if (distanceToTarget < 2.0) {
                 targetPos = null;
                 goose.getNavigation().stop();
@@ -154,7 +154,7 @@ public class GooseWanderGoal extends Goal {
                 handleDirectSwimming();
             } else {
                 if (navigationTimeout % 20 == 0 && distanceToTarget > 3.0) {
-                    goose.getNavigation().startMovingTo(targetPos.x, targetPos.y, targetPos.z, this.speed);
+                    goose.getNavigation().moveTo(targetPos.x, targetPos.y, targetPos.z, this.speed);
                 }
             }
 
@@ -170,11 +170,11 @@ public class GooseWanderGoal extends Goal {
     private void handleDirectSwimming() {
         if (targetPos == null) return;
 
-        Vec3d currentPos = goose.getEntityPos();
-        Vec3d direction = targetPos.subtract(currentPos).normalize();
+        Vec3 currentPos = goose.position();
+        Vec3 direction = targetPos.subtract(currentPos).normalize();
 
         double targetYaw = Math.atan2(-direction.x, direction.z) * (180.0 / Math.PI);
-        float currentYaw = goose.getYaw();
+        float currentYaw = goose.getYRot();
 
         while (targetYaw > 180) targetYaw -= 360;
         while (targetYaw < -180) targetYaw += 360;
@@ -189,42 +189,42 @@ public class GooseWanderGoal extends Goal {
         float yawAdjustment = Math.max(-maxRotation, Math.min(maxRotation, yawDiff));
         float newYaw = currentYaw + yawAdjustment;
 
-        goose.setYaw(newYaw);
-        goose.setBodyYaw(newYaw);
-        goose.setHeadYaw(newYaw);
+        goose.setYRot(newYaw);
+        goose.setYBodyRot(newYaw);
+        goose.setYHeadRot(newYaw);
 
         if (Math.abs(yawDiff) < 45) {
             double swimSpeed = this.speed * 0.15;
-            Vec3d velocity = goose.getVelocity();
+            Vec3 velocity = goose.getDeltaMovement();
 
-            goose.setVelocity(
+            goose.setDeltaMovement(
                     direction.x * swimSpeed,
                     velocity.y,
                     direction.z * swimSpeed
             );
-            goose.velocityDirty = true;
+            goose.needsSync = true;
         } else {
-            Vec3d velocity = goose.getVelocity();
-            goose.setVelocity(
+            Vec3 velocity = goose.getDeltaMovement();
+            goose.setDeltaMovement(
                     velocity.x * 0.5,
                     velocity.y,
                     velocity.z * 0.5
             );
-            goose.velocityDirty = true;
+            goose.needsSync = true;
         }
     }
 
     private void handleReturnToPreference() {
         boolean prefersWater = goose.getPrefersWater();
-        boolean inWater = goose.isTouchingWater();
+        boolean inWater = goose.isInWater();
 
         if (prefersWater && !inWater) {
             if (nearestWaterPos != null) {
-                setTarget(Vec3d.ofBottomCenter(nearestWaterPos));
+                setTarget(Vec3.atBottomCenterOf(nearestWaterPos));
                 currentMode = MovementMode.SEEKING_WATER;
             }
         } else if (!prefersWater && inWater) {
-            Vec3d landPos = findLandNearWater();
+            Vec3 landPos = findLandNearWater();
             if (landPos != null) {
                 setTarget(landPos);
                 currentMode = MovementMode.SEEKING_LAND;
@@ -242,10 +242,10 @@ public class GooseWanderGoal extends Goal {
 
     private void handleWanderingMode() {
         boolean prefersWater = goose.getPrefersWater();
-        boolean inWater = goose.isTouchingWater();
+        boolean inWater = goose.isInWater();
 
         if (targetPos == null) {
-            Vec3d wanderTarget = findWanderTarget();
+            Vec3 wanderTarget = findWanderTarget();
             if (wanderTarget != null) {
                 setTarget(wanderTarget);
             } else {
@@ -263,7 +263,7 @@ public class GooseWanderGoal extends Goal {
     }
 
     private void handleSeekingWaterMode() {
-        boolean inWater = goose.isTouchingWater();
+        boolean inWater = goose.isInWater();
 
         if (inWater) {
             targetPos = null;
@@ -274,7 +274,7 @@ public class GooseWanderGoal extends Goal {
         if (targetPos == null || nearestWaterPos == null) {
             updateNearestWater();
             if (nearestWaterPos != null) {
-                setTarget(Vec3d.ofBottomCenter(nearestWaterPos));
+                setTarget(Vec3.atBottomCenterOf(nearestWaterPos));
             } else {
                 transitionToMode(MovementMode.IDLE);
             }
@@ -286,16 +286,16 @@ public class GooseWanderGoal extends Goal {
     }
 
     private void handleSeekingLandMode() {
-        boolean inWater = goose.isTouchingWater();
+        boolean inWater = goose.isInWater();
 
-        if (!inWater && goose.isOnGround()) {
+        if (!inWater && goose.onGround()) {
             targetPos = null;
             transitionToMode(MovementMode.WANDERING);
             return;
         }
 
         if (targetPos == null) {
-            Vec3d landPos = findLandNearWater();
+            Vec3 landPos = findLandNearWater();
             if (landPos != null) {
                 setTarget(landPos);
             } else {
@@ -314,7 +314,7 @@ public class GooseWanderGoal extends Goal {
         }
 
         if (nearestWaterPos != null) {
-            double distanceToWater = goose.getBlockPos().getSquaredDistance(nearestWaterPos);
+            double distanceToWater = goose.blockPosition().distSqr(nearestWaterPos);
 
             if (distanceToWater <= 256.0) {
                 targetPos = null;
@@ -324,13 +324,13 @@ public class GooseWanderGoal extends Goal {
 
             boolean prefersWater = goose.getPrefersWater();
             if (prefersWater) {
-                setTarget(Vec3d.ofBottomCenter(nearestWaterPos));
+                setTarget(Vec3.atBottomCenterOf(nearestWaterPos));
             } else {
-                Vec3d landPos = findLandNearWater();
+                Vec3 landPos = findLandNearWater();
                 if (landPos != null) {
                     setTarget(landPos);
                 } else {
-                    setTarget(Vec3d.ofBottomCenter(nearestWaterPos));
+                    setTarget(Vec3.atBottomCenterOf(nearestWaterPos));
                 }
             }
         }
@@ -342,7 +342,7 @@ public class GooseWanderGoal extends Goal {
         }
 
         if (nearestWaterPos != null) {
-            double distanceToWater = goose.getBlockPos().getSquaredDistance(nearestWaterPos);
+            double distanceToWater = goose.blockPosition().distSqr(nearestWaterPos);
             if (distanceToWater > 256.0) {
                 transitionToMode(MovementMode.RETURNING);
                 return;
@@ -350,7 +350,7 @@ public class GooseWanderGoal extends Goal {
         }
 
         boolean prefersWater = goose.getPrefersWater();
-        boolean inWater = goose.isTouchingWater();
+        boolean inWater = goose.isInWater();
 
         if (prefersWater) {
             if (!inWater) {
@@ -384,9 +384,9 @@ public class GooseWanderGoal extends Goal {
     }
 
     @Nullable
-    private Vec3d findWanderTarget() {
+    private Vec3 findWanderTarget() {
         boolean prefersWater = goose.getPrefersWater();
-        boolean inWater = goose.isTouchingWater();
+        boolean inWater = goose.isInWater();
 
         if ((prefersWater && inWater) || (!prefersWater && !inWater)) {
             return findNearbyWanderPos();
@@ -396,16 +396,16 @@ public class GooseWanderGoal extends Goal {
             return findNearbyWanderPos();
         } else {
             if (prefersWater) {
-                return nearestWaterPos != null ? Vec3d.ofBottomCenter(nearestWaterPos) : findNearbyWanderPos();
+                return nearestWaterPos != null ? Vec3.atBottomCenterOf(nearestWaterPos) : findNearbyWanderPos();
             } else {
-                Vec3d landPos = findLandNearWater();
+                Vec3 landPos = findLandNearWater();
                 return landPos != null ? landPos : findNearbyWanderPos();
             }
         }
     }
 
     @Nullable
-    private Vec3d findNearbyWanderPos() {
+    private Vec3 findNearbyWanderPos() {
         boolean prefersWater = goose.getPrefersWater();
 
         for (int attempt = 0; attempt < 10; attempt++) {
@@ -415,29 +415,29 @@ public class GooseWanderGoal extends Goal {
             double randomX = goose.getX() + Math.cos(angle) * distance;
             double randomZ = goose.getZ() + Math.sin(angle) * distance;
 
-            BlockPos targetBlockPos = BlockPos.ofFloored(randomX, goose.getY(), randomZ);
+            BlockPos targetBlockPos = BlockPos.containing(randomX, goose.getY(), randomZ);
 
             if (nearestWaterPos != null) {
-                if (targetBlockPos.getSquaredDistance(nearestWaterPos) > 256.0) {
+                if (targetBlockPos.distSqr(nearestWaterPos) > 256.0) {
                     continue;
                 }
             }
 
-            boolean targetIsWater = goose.getEntityWorld().getFluidState(targetBlockPos).isIn(net.minecraft.registry.tag.FluidTags.WATER);
+            boolean targetIsWater = goose.level().getFluidState(targetBlockPos).is(net.minecraft.tags.FluidTags.WATER);
 
             if (prefersWater == targetIsWater) {
                 double targetY = goose.getY();
                 if (targetIsWater) {
                     BlockPos checkPos = targetBlockPos;
-                    while (goose.getEntityWorld().getFluidState(checkPos).isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
+                    while (goose.level().getFluidState(checkPos).is(net.minecraft.tags.FluidTags.WATER)) {
                         targetY = checkPos.getY() + 1.0;
-                        checkPos = checkPos.up();
+                        checkPos = checkPos.above();
                     }
                 } else {
                     targetY = goose.getY() + (goose.getRandom().nextDouble() - 0.5) * 2.0;
                 }
 
-                return new Vec3d(randomX, targetY, randomZ);
+                return new Vec3(randomX, targetY, randomZ);
             }
         }
 
@@ -445,21 +445,21 @@ public class GooseWanderGoal extends Goal {
     }
 
     @Nullable
-    private Vec3d findLandNearWater() {
+    private Vec3 findLandNearWater() {
         if (nearestWaterPos == null) {
             return null;
         }
 
         for (int attempt = 0; attempt < 15; attempt++) {
-            BlockPos landPos = nearestWaterPos.add(
+            BlockPos landPos = nearestWaterPos.offset(
                     goose.getRandom().nextInt(17) - 8,
                     goose.getRandom().nextInt(5) - 2,
                     goose.getRandom().nextInt(17) - 8
             );
 
-            if (!goose.getEntityWorld().getFluidState(landPos).isIn(net.minecraft.registry.tag.FluidTags.WATER) &&
-                    goose.getEntityWorld().getBlockState(landPos.down()).isSolid()) {
-                return Vec3d.ofBottomCenter(landPos);
+            if (!goose.level().getFluidState(landPos).is(net.minecraft.tags.FluidTags.WATER) &&
+                    goose.level().getBlockState(landPos.below()).isSolid()) {
+                return Vec3.atBottomCenterOf(landPos);
             }
         }
 
@@ -467,18 +467,18 @@ public class GooseWanderGoal extends Goal {
     }
 
     private void updateNearestWater() {
-        BlockPos goosePos = goose.getBlockPos();
+        BlockPos goosePos = goose.blockPosition();
         BlockPos nearest = null;
         double nearestDistance = Double.MAX_VALUE;
 
-        for (BlockPos pos : BlockPos.iterate(
-                goosePos.add(-32, -16, -32),
-                goosePos.add(32, 16, 32))) {
-            if (goose.getEntityWorld().getFluidState(pos).isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
-                double distance = goosePos.getSquaredDistance(pos);
+        for (BlockPos pos : BlockPos.betweenClosed(
+                goosePos.offset(-32, -16, -32),
+                goosePos.offset(32, 16, 32))) {
+            if (goose.level().getFluidState(pos).is(net.minecraft.tags.FluidTags.WATER)) {
+                double distance = goosePos.distSqr(pos);
                 if (distance < nearestDistance) {
                     nearestDistance = distance;
-                    nearest = pos.toImmutable();
+                    nearest = pos.immutable();
                 }
             }
         }
@@ -486,24 +486,24 @@ public class GooseWanderGoal extends Goal {
         this.nearestWaterPos = nearest;
     }
 
-    private void setTarget(Vec3d target) {
+    private void setTarget(Vec3 target) {
         this.targetPos = target;
         this.navigationTimeout = MAX_NAVIGATION_TIMEOUT;
 
-        if (goose.isTouchingWater()) {
+        if (goose.isInWater()) {
             useDirectSwimming = true;
             goose.getNavigation().stop();
         } else {
             useDirectSwimming = false;
-            this.goose.getNavigation().startMovingTo(target.x, target.y, target.z, this.speed);
+            this.goose.getNavigation().moveTo(target.x, target.y, target.z, this.speed);
         }
     }
 
     private void checkIfStuck() {
-        BlockPos currentPos = goose.getBlockPos();
+        BlockPos currentPos = goose.blockPosition();
 
         if (lastPos != null && targetPos != null) {
-            double distanceMoved = currentPos.getSquaredDistance(lastPos);
+            double distanceMoved = currentPos.distSqr(lastPos);
 
             if (distanceMoved < STUCK_THRESHOLD) {
                 targetPos = null;
@@ -512,6 +512,6 @@ public class GooseWanderGoal extends Goal {
             }
         }
 
-        lastPos = currentPos.toImmutable();
+        lastPos = currentPos.immutable();
     }
 }

@@ -1,24 +1,24 @@
 package potatowolfie.silly_goose.advancement;
 
-import net.minecraft.advancement.AdvancementEntry;
-import net.minecraft.advancement.AdvancementProgress;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.advancements.AdvancementProgress;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 
 public class UnfairTradeAdvancementHandler {
 
-    public static void grantUnfairTradeAdvancement(ServerPlayerEntity player) {
-        MinecraftServer server = player.getEntityWorld().getServer();
+    public static void grantUnfairTradeAdvancement(ServerPlayer player) {
+        MinecraftServer server = player.level().getServer();
         if (server == null) return;
 
-        Identifier advId = Identifier.of("silly-goose", "adventure/unfair_trade");
-        AdvancementEntry advancement = server.getAdvancementLoader().get(advId);
+        Identifier advId = Identifier.fromNamespaceAndPath("silly-goose", "adventure/unfair_trade");
+        AdvancementHolder advancement = server.getAdvancements().get(advId);
 
         if (advancement != null) {
-            AdvancementProgress progress = player.getAdvancementTracker().getProgress(advancement);
+            AdvancementProgress progress = player.getAdvancements().getOrStartProgress(advancement);
             if (!progress.isDone()) {
-                player.getAdvancementTracker().grantCriterion(advancement, "traded");
+                player.getAdvancements().award(advancement, "traded");
             }
         }
     }

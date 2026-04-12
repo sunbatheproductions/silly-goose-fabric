@@ -1,13 +1,13 @@
 package potatowolfie.silly_goose.damage;
 
-import net.minecraft.entity.damage.DamageType;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.damagesource.DamageType;
 import potatowolfie.silly_goose.SillyGoose;
 
 public class SillyGooseDamageTypes {
-    public static final RegistryKey<DamageType> GOOSE_BOTHER = RegistryKey.of(RegistryKeys.DAMAGE_TYPE, Identifier.of(SillyGoose.MOD_ID, "goose_bother"));
-    public static final RegistryKey<DamageType> GOOSE_PECK = RegistryKey.of(RegistryKeys.DAMAGE_TYPE, Identifier.of(SillyGoose.MOD_ID, "goose_peck"));
-    public static final RegistryKey<DamageType> GOOSE_HONK = RegistryKey.of(RegistryKeys.DAMAGE_TYPE, Identifier.of(SillyGoose.MOD_ID, "goose_honk"));
+    public static final ResourceKey<DamageType> GOOSE_BOTHER = ResourceKey.create(Registries.DAMAGE_TYPE, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "goose_bother"));
+    public static final ResourceKey<DamageType> GOOSE_PECK = ResourceKey.create(Registries.DAMAGE_TYPE, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "goose_peck"));
+    public static final ResourceKey<DamageType> GOOSE_HONK = ResourceKey.create(Registries.DAMAGE_TYPE, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "goose_honk"));
 }

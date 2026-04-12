@@ -5,11 +5,11 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
-import net.minecraft.entity.SpawnGroup;
-import net.minecraft.entity.SpawnLocationTypes;
-import net.minecraft.entity.SpawnRestriction;
-import net.minecraft.world.Heightmap;
-import net.minecraft.world.biome.BiomeKeys;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.SpawnPlacementTypes;
+import net.minecraft.world.entity.SpawnPlacements;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.levelgen.Heightmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import potatowolfie.silly_goose.entity.SillyGooseEntities;
@@ -36,30 +36,30 @@ public class SillyGoose implements ModInitializer {
 		SillyGooseSounds.registerSounds();
 
 		FabricDefaultAttributeRegistry.register(SillyGooseEntities.GOOSE, GooseEntity.createGooseAttributes());
-		SpawnRestriction.register(
+		SpawnPlacements.register(
 				SillyGooseEntities.GOOSE,
-				SpawnLocationTypes.ON_GROUND,
-				Heightmap.Type.MOTION_BLOCKING_NO_LEAVES,
+				SpawnPlacementTypes.ON_GROUND,
+				Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
 				GooseEntity::canSpawn
 		);
 		BiomeModifications.addSpawn(
 				BiomeSelectors.foundInOverworld()
 						.and(BiomeSelectors.excludeByKey(
-								BiomeKeys.OCEAN,
-								BiomeKeys.DEEP_OCEAN,
-								BiomeKeys.COLD_OCEAN,
-								BiomeKeys.DEEP_COLD_OCEAN,
-								BiomeKeys.FROZEN_OCEAN,
-								BiomeKeys.DEEP_FROZEN_OCEAN,
-								BiomeKeys.LUKEWARM_OCEAN,
-								BiomeKeys.DEEP_LUKEWARM_OCEAN,
-								BiomeKeys.WARM_OCEAN,
-								BiomeKeys.DESERT,
-								BiomeKeys.BADLANDS,
-								BiomeKeys.WOODED_BADLANDS,
-								BiomeKeys.ERODED_BADLANDS
+								Biomes.OCEAN,
+								Biomes.DEEP_OCEAN,
+								Biomes.COLD_OCEAN,
+								Biomes.DEEP_COLD_OCEAN,
+								Biomes.FROZEN_OCEAN,
+								Biomes.DEEP_FROZEN_OCEAN,
+								Biomes.LUKEWARM_OCEAN,
+								Biomes.DEEP_LUKEWARM_OCEAN,
+								Biomes.WARM_OCEAN,
+								Biomes.DESERT,
+								Biomes.BADLANDS,
+								Biomes.WOODED_BADLANDS,
+								Biomes.ERODED_BADLANDS
 						)),
-				SpawnGroup.CREATURE,
+				MobCategory.CREATURE,
 				SillyGooseEntities.GOOSE,
 				18,
 				1,

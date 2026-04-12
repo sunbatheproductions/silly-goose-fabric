@@ -1,36 +1,36 @@
 package potatowolfie.silly_goose.entity.goose.goals;
 
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.passive.VillagerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.sound.SoundEvents;
 import potatowolfie.silly_goose.entity.goose.GooseEntity;
 
 import java.util.EnumSet;
 import java.util.List;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public class GooseStealFromVillagerGoal extends Goal {
     private final GooseEntity goose;
-    private VillagerEntity targetVillager;
+    private Villager targetVillager;
     private int stealDelay = 0;
 
     public GooseStealFromVillagerGoal(GooseEntity goose) {
         this.goose = goose;
-        this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
     @Override
-    public boolean canStart() {
-        if (!goose.canPickUpLoot() || !goose.getMainHandStack().isEmpty() || goose.isBaby()) {
+    public boolean canUse() {
+        if (!goose.canPickUpLoot() || !goose.getMainHandItem().isEmpty() || goose.isBaby()) {
             return false;
         }
 
         // Find nearby villagers
-        List<VillagerEntity> list = goose.getEntityWorld().getEntitiesByClass(
-            VillagerEntity.class, 
-            goose.getBoundingBox().expand(8.0, 4.0, 8.0), 
+        List<Villager> list = goose.level().getEntitiesOfClass(
+            Villager.class, 
+            goose.getBoundingBox().inflate(8.0, 4.0, 8.0), 
             villager -> !villager.getInventory().isEmpty()
         );
 
@@ -42,8 +42,8 @@ public class GooseStealFromVillagerGoal extends Goal {
     }
 
     @Override
-    public boolean shouldContinue() {
-        return targetVillager != null && targetVillager.isAlive() && goose.getMainHandStack().isEmpty();
+    public boolean canContinueToUse() {
+        return targetVillager != null && targetVillager.isAlive() && goose.getMainHandItem().isEmpty();
     }
 
     @Override
@@ -53,30 +53,30 @@ public class GooseStealFromVillagerGoal extends Goal {
 
     @Override
     public void tick() {
-        goose.getLookControl().lookAt(targetVillager, 30.0F, 30.0F);
+        goose.getLookControl().setLookAt(targetVillager, 30.0F, 30.0F);
         
-        if (goose.squaredDistanceTo(targetVillager) < 1.5) {
+        if (goose.distanceToSqr(targetVillager) < 1.5) {
             if (++stealDelay >= 5) {
                 stealItem();
             }
         } else {
-            goose.getNavigation().startMovingTo(targetVillager, 1.2);
+            goose.getNavigation().moveTo(targetVillager, 1.2);
             stealDelay = 0;
         }
     }
 
     private void stealItem() {
         var inventory = targetVillager.getInventory();
-        for (int i = 0; i < inventory.size(); i++) {
-            ItemStack stack = inventory.getStack(i);
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
             // Define "Valuable": Emeralds, food, or specific modded items
-            if (!stack.isEmpty() && (stack.isOf(Items.EMERALD) || stack.isOf(Items.WHEAT))) {
+            if (!stack.isEmpty() && (stack.is(Items.EMERALD) || stack.is(Items.WHEAT))) {
                 ItemStack stolenStack = stack.split(1);
-                goose.equipStack(EquipmentSlot.MAINHAND, stolenStack);
-                goose.setEquipmentDropChance(EquipmentSlot.MAINHAND, 2.0F);
+                goose.setItemSlot(EquipmentSlot.MAINHAND, stolenStack);
+                goose.setDropChance(EquipmentSlot.MAINHAND, 2.0F);
                 
-                goose.playSound(SoundEvents.ENTITY_ITEM_PICKUP, 1.0F, 1.0F);
-                targetVillager.playSound(SoundEvents.ENTITY_VILLAGER_NO, 1.0F, 1.0F);
+                goose.playSound(SoundEvents.ITEM_PICKUP, 1.0F, 1.0F);
+                targetVillager.playSound(SoundEvents.VILLAGER_NO, 1.0F, 1.0F);
                 
                 // Set goose into "Hit and Run" mode to escape with the loot
                 goose.setInHitAndRunMode(true);

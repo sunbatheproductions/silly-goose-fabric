@@ -1,24 +1,24 @@
 package potatowolfie.silly_goose.advancement;
 
-import net.minecraft.advancement.AdvancementEntry;
-import net.minecraft.advancement.AdvancementProgress;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.advancements.AdvancementProgress;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 
 public class HonkandRunAdvancementHandler {
 
-    public static void grantHonkandRunAdvancement(ServerPlayerEntity player) {
-        MinecraftServer server = player.getEntityWorld().getServer();
+    public static void grantHonkandRunAdvancement(ServerPlayer player) {
+        MinecraftServer server = player.level().getServer();
         if (server == null) return;
 
-        Identifier advId = Identifier.of("silly-goose", "adventure/honk_and_run");
-        AdvancementEntry advancement = server.getAdvancementLoader().get(advId);
+        Identifier advId = Identifier.fromNamespaceAndPath("silly-goose", "adventure/honk_and_run");
+        AdvancementHolder advancement = server.getAdvancements().get(advId);
 
         if (advancement != null) {
-            AdvancementProgress progress = player.getAdvancementTracker().getProgress(advancement);
+            AdvancementProgress progress = player.getAdvancements().getOrStartProgress(advancement);
             if (!progress.isDone()) {
-                player.getAdvancementTracker().grantCriterion(advancement, "honked");
+                player.getAdvancements().award(advancement, "honked");
             }
         }
     }

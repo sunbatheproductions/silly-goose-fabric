@@ -1,19 +1,20 @@
 package potatowolfie.silly_goose.registry;
 
-import net.fabricmc.fabric.api.object.builder.v1.entity.FabricTrackedDataRegistry;
-import net.minecraft.entity.data.TrackedDataHandler;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.util.Identifier;
+import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityDataRegistry;
+import net.minecraft.core.Holder;
+import net.minecraft.network.syncher.EntityDataSerializer;
+import net.minecraft.resources.Identifier;
 import potatowolfie.silly_goose.SillyGoose;
 import potatowolfie.silly_goose.entity.goose.variant.GooseVariant;
 
 public class SillyGooseTrackedDataHandlerRegistry {
-    public static final TrackedDataHandler<RegistryEntry<GooseVariant>> GOOSE_VARIANT =
-            TrackedDataHandler.create(GooseVariant.ENTRY_PACKET_CODEC);
+
+    public static final EntityDataSerializer<Holder<GooseVariant>> GOOSE_VARIANT =
+            EntityDataSerializer.forValueType(GooseVariant.STREAM_CODEC);
 
     public static void register() {
-        FabricTrackedDataRegistry.register(
-                Identifier.of(SillyGoose.MOD_ID, "goose_variant"),
+        FabricEntityDataRegistry.register(
+                Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "goose_variant"),
                 GOOSE_VARIANT
         );
     }

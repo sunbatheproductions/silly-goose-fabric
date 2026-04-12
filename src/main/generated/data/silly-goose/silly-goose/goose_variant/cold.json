@@ -1,5 +1,6 @@
 {
   "asset_id": "silly-goose:entity/goose/cold_goose",
+  "baby_texture": "silly-goose:entity/goose/goose_cold_baby",
   "model": "cold",
   "spawn_conditions": [
     {

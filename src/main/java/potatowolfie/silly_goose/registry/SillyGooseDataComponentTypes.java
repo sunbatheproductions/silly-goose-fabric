@@ -1,26 +1,26 @@
 package potatowolfie.silly_goose.registry;
 
-import net.minecraft.component.ComponentType;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.entry.LazyRegistryEntryReference;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import potatowolfie.silly_goose.SillyGoose;
 import potatowolfie.silly_goose.entity.goose.variant.GooseVariant;
 
-public class SillyGooseDataComponentTypes {
-    public static final ComponentType<LazyRegistryEntryReference<GooseVariant>> GOOSE_VARIANT =
-            register("goose_variant", ComponentType.<LazyRegistryEntryReference<GooseVariant>>builder()
-                    .codec(LazyRegistryEntryReference.createCodec(
-                            SillyGooseRegistryKeys.GOOSE_VARIANT,
-                            GooseVariant.ENTRY_CODEC))
-                    .packetCodec(LazyRegistryEntryReference.createPacketCodec(
-                            SillyGooseRegistryKeys.GOOSE_VARIANT,
-                            GooseVariant.ENTRY_PACKET_CODEC))
-                    .build());
+import java.util.function.UnaryOperator;
 
-    private static <T> ComponentType<T> register(String id, ComponentType<T> componentType) {
-        return Registry.register(Registries.DATA_COMPONENT_TYPE, Identifier.of(SillyGoose.MOD_ID, id), componentType);
+public class SillyGooseDataComponentTypes {
+    public static final DataComponentType<Holder<GooseVariant>> GOOSE_VARIANT = register("goose_variant", (b) -> {
+        return b.persistent(GooseVariant.CODEC).networkSynchronized(GooseVariant.STREAM_CODEC);
+    });
+
+    private static <T> DataComponentType<T> register(String id, UnaryOperator<DataComponentType.Builder<T>> builder) {
+        return Registry.register(
+                BuiltInRegistries.DATA_COMPONENT_TYPE,
+                Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, id),
+                builder.apply(DataComponentType.builder()).build()
+        );
     }
 
     public static void register() {

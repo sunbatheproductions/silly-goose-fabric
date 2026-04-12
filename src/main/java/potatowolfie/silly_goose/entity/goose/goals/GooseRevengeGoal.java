@@ -1,19 +1,5 @@
 package potatowolfie.silly_goose.entity.goose.goals;
 
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageType;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 import potatowolfie.silly_goose.advancement.HitandRunAdvancementHandler;
 import potatowolfie.silly_goose.advancement.HonkandRunAdvancementHandler;
 import potatowolfie.silly_goose.damage.SillyGooseDamageTypes;
@@ -21,16 +7,29 @@ import potatowolfie.silly_goose.entity.goose.GooseEntity;
 import potatowolfie.silly_goose.sound.SillyGooseSounds;
 
 import java.util.EnumSet;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
 public class GooseRevengeGoal extends Goal {
     private final GooseEntity goose;
-    private PlayerEntity targetPlayer;
+    private Player targetPlayer;
     private boolean isRunningAway;
     private double runAwayDistance;
     private int hitCount = 0;
     private int targetHits;
 
-    private Vec3d targetPos = null;
+    private Vec3 targetPos = null;
     private int navigationTimeout = 0;
     private int stuckCheckTimer = 0;
     private BlockPos lastPos = null;
@@ -58,11 +57,11 @@ public class GooseRevengeGoal extends Goal {
 
     public GooseRevengeGoal(GooseEntity goose) {
         this.goose = goose;
-        this.setControls(EnumSet.of(Goal.Control.MOVE, Goal.Control.LOOK));
+        this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
     @Override
-    public boolean canStart() {
+    public boolean canUse() {
         if (goose.isBaby()) {
             return false;
         }
@@ -71,12 +70,12 @@ public class GooseRevengeGoal extends Goal {
             return false;
         }
 
-        PlayerEntity revengeTarget = goose.getRevengeTargetPlayer();
+        Player revengeTarget = goose.getRevengeTargetPlayer();
         if (revengeTarget == null || !revengeTarget.isAlive() || revengeTarget.isSpectator() || revengeTarget.isCreative()) {
             return false;
         }
 
-        double distanceToPlayer = goose.squaredDistanceTo(revengeTarget);
+        double distanceToPlayer = goose.distanceToSqr(revengeTarget);
         if (distanceToPlayer > DETECTION_RADIUS * DETECTION_RADIUS) {
             return false;
         }
@@ -97,13 +96,13 @@ public class GooseRevengeGoal extends Goal {
     }
 
     @Override
-    public boolean shouldContinue() {
+    public boolean canContinueToUse() {
         if (targetPlayer == null || !targetPlayer.isAlive() || targetPlayer.isSpectator() || targetPlayer.isCreative()) {
             return false;
         }
 
         if (isRunningAway) {
-            double distanceToPlayer = goose.squaredDistanceTo(targetPlayer);
+            double distanceToPlayer = goose.distanceToSqr(targetPlayer);
             return distanceToPlayer < runAwayDistance * runAwayDistance;
         }
 
@@ -138,7 +137,7 @@ public class GooseRevengeGoal extends Goal {
             stuckCheckTimer = STUCK_CHECK_INTERVAL;
         }
 
-        if (goose.isTouchingWater()) {
+        if (goose.isInWater()) {
             if (!useDirectSwimming) {
                 useDirectSwimming = true;
                 goose.getNavigation().stop();
@@ -151,21 +150,21 @@ public class GooseRevengeGoal extends Goal {
 
         if (!isRunningAway) {
             if (useDirectSwimming) {
-                Vec3d playerPos = targetPlayer.getEntityPos();
+                Vec3 playerPos = targetPlayer.position();
                 handleDirectSwimmingToTarget(playerPos);
             } else {
-                goose.getNavigation().startMovingTo(targetPlayer, RUN_SPEED_MULTIPLIER);
+                goose.getNavigation().moveTo(targetPlayer, RUN_SPEED_MULTIPLIER);
             }
 
-            goose.getLookControl().lookAt(targetPlayer, 30.0F, 30.0F);
+            goose.getLookControl().setLookAt(targetPlayer, 30.0F, 30.0F);
 
             if (attackCooldown > 0) {
                 attackCooldown--;
             }
 
-            if (attackCooldown <= 0 && goose.squaredDistanceTo(targetPlayer) <= 4.0) {
+            if (attackCooldown <= 0 && goose.distanceToSqr(targetPlayer) <= 4.0) {
                 goose.playSound(SillyGooseSounds.GOOSE_ATTACK, 1.0F, 1.0F);
-                RegistryKey<DamageType> damageTypeKey;
+                ResourceKey<DamageType> damageTypeKey;
                 int random = goose.getRandom().nextInt(3);
                 switch (random) {
                     case 0 -> damageTypeKey = SillyGooseDamageTypes.GOOSE_BOTHER;
@@ -174,17 +173,17 @@ public class GooseRevengeGoal extends Goal {
                 }
 
                 DamageSource damageSource = new DamageSource(
-                        goose.getEntityWorld().getRegistryManager()
-                                .getOrThrow(RegistryKeys.DAMAGE_TYPE)
-                                .getEntry(damageTypeKey.getValue()).get(),
+                        goose.level().registryAccess()
+                                .lookupOrThrow(Registries.DAMAGE_TYPE)
+                                .get(damageTypeKey.identifier()).get(),
                         goose
                 );
 
-                float damage = (float) goose.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
-                targetPlayer.damage((ServerWorld) goose.getEntityWorld(), damageSource, damage);
+                float damage = (float) goose.getAttributeValue(Attributes.ATTACK_DAMAGE);
+                targetPlayer.hurtServer((ServerLevel) goose.level(), damageSource, damage);
 
-                if (targetPlayer instanceof ServerPlayerEntity serverPlayer) {
-                    ItemStack mainhandItem = goose.getEquippedStack(EquipmentSlot.MAINHAND);
+                if (targetPlayer instanceof ServerPlayer serverPlayer) {
+                    ItemStack mainhandItem = goose.getItemBySlot(EquipmentSlot.MAINHAND);
                     if (!mainhandItem.isEmpty()) {
                         HitandRunAdvancementHandler.grantHitandRunAdvancement(serverPlayer);
                     } else {
@@ -204,8 +203,8 @@ public class GooseRevengeGoal extends Goal {
             if (targetPos != null) {
                 navigationTimeout--;
 
-                double distanceToTarget = goose.getEntityPos().distanceTo(targetPos);
-                if (distanceToTarget < 2.0 || goose.squaredDistanceTo(targetPlayer) >= runAwayDistance * runAwayDistance) {
+                double distanceToTarget = goose.position().distanceTo(targetPos);
+                if (distanceToTarget < 2.0 || goose.distanceToSqr(targetPlayer) >= runAwayDistance * runAwayDistance) {
                     targetPos = null;
                     goose.getNavigation().stop();
                     useDirectSwimming = false;
@@ -216,7 +215,7 @@ public class GooseRevengeGoal extends Goal {
                     handleDirectSwimming();
                 } else {
                     if (navigationTimeout % 20 == 0 && distanceToTarget > 3.0) {
-                        goose.getNavigation().startMovingTo(targetPos.x, targetPos.y, targetPos.z, RUN_SPEED_MULTIPLIER);
+                        goose.getNavigation().moveTo(targetPos.x, targetPos.y, targetPos.z, RUN_SPEED_MULTIPLIER);
                     }
                 }
 
@@ -256,7 +255,7 @@ public class GooseRevengeGoal extends Goal {
             distance = 1.0;
         }
 
-        double escapeIncrement = goose.isTouchingWater() ? 8.0 : runAwayDistance;
+        double escapeIncrement = goose.isInWater() ? 8.0 : runAwayDistance;
         dx = (dx / distance) * escapeIncrement;
         dz = (dz / distance) * escapeIncrement;
 
@@ -264,20 +263,20 @@ public class GooseRevengeGoal extends Goal {
         double targetZ = goose.getZ() + dz;
         double targetY = goose.getY();
 
-        BlockPos targetBlockPos = BlockPos.ofFloored(targetX, targetY, targetZ);
-        boolean targetIsWater = goose.getEntityWorld().getFluidState(targetBlockPos).isIn(net.minecraft.registry.tag.FluidTags.WATER);
+        BlockPos targetBlockPos = BlockPos.containing(targetX, targetY, targetZ);
+        boolean targetIsWater = goose.level().getFluidState(targetBlockPos).is(net.minecraft.tags.FluidTags.WATER);
 
-        if (targetIsWater || goose.isTouchingWater()) {
-            BlockPos checkPos = goose.isTouchingWater() ? goose.getBlockPos() : targetBlockPos;
+        if (targetIsWater || goose.isInWater()) {
+            BlockPos checkPos = goose.isInWater() ? goose.blockPosition() : targetBlockPos;
 
-            checkPos = BlockPos.ofFloored(targetX, checkPos.getY(), targetZ);
-            while (goose.getEntityWorld().getFluidState(checkPos).isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
+            checkPos = BlockPos.containing(targetX, checkPos.getY(), targetZ);
+            while (goose.level().getFluidState(checkPos).is(net.minecraft.tags.FluidTags.WATER)) {
                 targetY = checkPos.getY() + 1.0;
-                checkPos = checkPos.up();
+                checkPos = checkPos.above();
             }
         }
 
-        setTarget(new Vec3d(targetX, targetY, targetZ));
+        setTarget(new Vec3(targetX, targetY, targetZ));
     }
 
     private void checkAndApplyWaterExitBoost() {
@@ -285,22 +284,22 @@ public class GooseRevengeGoal extends Goal {
         if (waterExitTimer <= 0) {
             waterExitTimer = WATER_EXIT_BOOST_INTERVAL;
 
-            if (goose.isTouchingWater()) {
-                BlockPos abovePos = goose.getBlockPos().up();
+            if (goose.isInWater()) {
+                BlockPos abovePos = goose.blockPosition().above();
 
-                if (!goose.getEntityWorld().getFluidState(abovePos).isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
+                if (!goose.level().getFluidState(abovePos).is(net.minecraft.tags.FluidTags.WATER)) {
                     boolean hasNearbyLand = false;
-                    BlockPos currentPos = goose.getBlockPos();
+                    BlockPos currentPos = goose.blockPosition();
 
                     for (int x = -1; x <= 1; x++) {
                         for (int z = -1; z <= 1; z++) {
                             if (x == 0 && z == 0) continue;
 
-                            BlockPos checkPos = currentPos.add(x, 0, z);
-                            BlockPos checkPosAbove = currentPos.add(x, 1, z);
+                            BlockPos checkPos = currentPos.offset(x, 0, z);
+                            BlockPos checkPosAbove = currentPos.offset(x, 1, z);
 
-                            boolean isLand = !goose.getEntityWorld().getFluidState(checkPos).isIn(net.minecraft.registry.tag.FluidTags.WATER);
-                            boolean isLandAbove = !goose.getEntityWorld().getFluidState(checkPosAbove).isIn(net.minecraft.registry.tag.FluidTags.WATER);
+                            boolean isLand = !goose.level().getFluidState(checkPos).is(net.minecraft.tags.FluidTags.WATER);
+                            boolean isLandAbove = !goose.level().getFluidState(checkPosAbove).is(net.minecraft.tags.FluidTags.WATER);
 
                             if (isLand || isLandAbove) {
                                 hasNearbyLand = true;
@@ -311,9 +310,9 @@ public class GooseRevengeGoal extends Goal {
                     }
 
                     if (hasNearbyLand) {
-                        Vec3d velocity = goose.getVelocity();
-                        goose.setVelocity(velocity.x, WATER_EXIT_BOOST_STRENGTH, velocity.z);
-                        goose.velocityDirty = true;
+                        Vec3 velocity = goose.getDeltaMovement();
+                        goose.setDeltaMovement(velocity.x, WATER_EXIT_BOOST_STRENGTH, velocity.z);
+                        goose.needsSync = true;
                     }
                 }
             }
@@ -323,11 +322,11 @@ public class GooseRevengeGoal extends Goal {
     private void handleDirectSwimming() {
         if (targetPos == null) return;
 
-        Vec3d currentPos = goose.getEntityPos();
-        Vec3d direction = targetPos.subtract(currentPos).normalize();
+        Vec3 currentPos = goose.position();
+        Vec3 direction = targetPos.subtract(currentPos).normalize();
 
         double targetYaw = Math.atan2(-direction.x, direction.z) * (180.0 / Math.PI);
-        float currentYaw = goose.getYaw();
+        float currentYaw = goose.getYRot();
 
         while (targetYaw > 180) targetYaw -= 360;
         while (targetYaw < -180) targetYaw += 360;
@@ -342,37 +341,37 @@ public class GooseRevengeGoal extends Goal {
         float yawAdjustment = Math.max(-maxRotation, Math.min(maxRotation, yawDiff));
         float newYaw = currentYaw + yawAdjustment;
 
-        goose.setYaw(newYaw);
-        goose.setBodyYaw(newYaw);
-        goose.setHeadYaw(newYaw);
+        goose.setYRot(newYaw);
+        goose.setYBodyRot(newYaw);
+        goose.setYHeadRot(newYaw);
 
         if (Math.abs(yawDiff) < 45) {
             double swimSpeed = SWIM_SPEED_MULTIPLIER * 0.15;
-            Vec3d velocity = goose.getVelocity();
+            Vec3 velocity = goose.getDeltaMovement();
 
-            goose.setVelocity(
+            goose.setDeltaMovement(
                     direction.x * swimSpeed,
                     velocity.y,
                     direction.z * swimSpeed
             );
-            goose.velocityDirty = true;
+            goose.needsSync = true;
         } else {
-            Vec3d velocity = goose.getVelocity();
-            goose.setVelocity(
+            Vec3 velocity = goose.getDeltaMovement();
+            goose.setDeltaMovement(
                     velocity.x * 0.5,
                     velocity.y,
                     velocity.z * 0.5
             );
-            goose.velocityDirty = true;
+            goose.needsSync = true;
         }
     }
 
-    private void handleDirectSwimmingToTarget(Vec3d target) {
-        Vec3d currentPos = goose.getEntityPos();
-        Vec3d direction = target.subtract(currentPos).normalize();
+    private void handleDirectSwimmingToTarget(Vec3 target) {
+        Vec3 currentPos = goose.position();
+        Vec3 direction = target.subtract(currentPos).normalize();
 
         double targetYaw = Math.atan2(-direction.x, direction.z) * (180.0 / Math.PI);
-        float currentYaw = goose.getYaw();
+        float currentYaw = goose.getYRot();
 
         while (targetYaw > 180) targetYaw -= 360;
         while (targetYaw < -180) targetYaw += 360;
@@ -387,67 +386,67 @@ public class GooseRevengeGoal extends Goal {
         float yawAdjustment = Math.max(-maxRotation, Math.min(maxRotation, yawDiff));
         float newYaw = currentYaw + yawAdjustment;
 
-        goose.setYaw(newYaw);
-        goose.setBodyYaw(newYaw);
-        goose.setHeadYaw(newYaw);
+        goose.setYRot(newYaw);
+        goose.setYBodyRot(newYaw);
+        goose.setYHeadRot(newYaw);
 
         if (Math.abs(yawDiff) < 45) {
             double swimSpeed = SWIM_SPEED_MULTIPLIER * 0.15;
-            Vec3d velocity = goose.getVelocity();
+            Vec3 velocity = goose.getDeltaMovement();
 
-            goose.setVelocity(
+            goose.setDeltaMovement(
                     direction.x * swimSpeed,
                     velocity.y,
                     direction.z * swimSpeed
             );
-            goose.velocityDirty = true;
+            goose.needsSync = true;
         } else {
-            Vec3d velocity = goose.getVelocity();
-            goose.setVelocity(
+            Vec3 velocity = goose.getDeltaMovement();
+            goose.setDeltaMovement(
                     velocity.x * 0.5,
                     velocity.y,
                     velocity.z * 0.5
             );
-            goose.velocityDirty = true;
+            goose.needsSync = true;
         }
     }
 
     private void updateNearestWater() {
-        BlockPos goosePos = goose.getBlockPos();
+        BlockPos goosePos = goose.blockPosition();
         BlockPos nearest = null;
         double nearestDistance = Double.MAX_VALUE;
 
-        for (BlockPos pos : BlockPos.iterate(
-                goosePos.add(-32, -16, -32),
-                goosePos.add(32, 16, 32))) {
-            if (goose.getEntityWorld().getFluidState(pos).isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
-                double distance = goosePos.getSquaredDistance(pos);
+        for (BlockPos pos : BlockPos.betweenClosed(
+                goosePos.offset(-32, -16, -32),
+                goosePos.offset(32, 16, 32))) {
+            if (goose.level().getFluidState(pos).is(net.minecraft.tags.FluidTags.WATER)) {
+                double distance = goosePos.distSqr(pos);
                 if (distance < nearestDistance) {
                     nearestDistance = distance;
-                    nearest = pos.toImmutable();
+                    nearest = pos.immutable();
                 }
             }
         }
     }
 
-    private void setTarget(Vec3d target) {
+    private void setTarget(Vec3 target) {
         this.targetPos = target;
         this.navigationTimeout = MAX_NAVIGATION_TIMEOUT;
 
-        if (goose.isTouchingWater()) {
+        if (goose.isInWater()) {
             useDirectSwimming = true;
             goose.getNavigation().stop();
         } else {
             useDirectSwimming = false;
-            this.goose.getNavigation().startMovingTo(target.x, target.y, target.z, RUN_SPEED_MULTIPLIER);
+            this.goose.getNavigation().moveTo(target.x, target.y, target.z, RUN_SPEED_MULTIPLIER);
         }
     }
 
     private void checkIfStuck() {
-        BlockPos currentPos = goose.getBlockPos();
+        BlockPos currentPos = goose.blockPosition();
 
         if (lastPos != null && targetPos != null) {
-            double distanceMoved = currentPos.getSquaredDistance(lastPos);
+            double distanceMoved = currentPos.distSqr(lastPos);
 
             if (distanceMoved < STUCK_THRESHOLD) {
                 targetPos = null;
@@ -455,6 +454,6 @@ public class GooseRevengeGoal extends Goal {
             }
         }
 
-        lastPos = currentPos.toImmutable();
+        lastPos = currentPos.immutable();
     }
 }

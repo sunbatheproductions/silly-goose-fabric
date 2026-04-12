@@ -1,53 +1,60 @@
 package potatowolfie.silly_goose.entity.goose.variant;
 
-import net.minecraft.entity.passive.AnimalTemperature;
-import net.minecraft.entity.spawn.BiomeSpawnCondition;
-import net.minecraft.entity.spawn.SpawnConditionSelectors;
-import net.minecraft.registry.Registerable;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntryList;
-import net.minecraft.registry.tag.BiomeTags;
-import net.minecraft.registry.tag.TagKey;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.ModelAndTexture;
-import net.minecraft.world.biome.Biome;
+import net.minecraft.core.ClientAsset;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.BiomeTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.animal.TemperatureVariants;
+import net.minecraft.world.entity.variant.BiomeCheck;
+import net.minecraft.world.entity.variant.ModelAndTexture;
+import net.minecraft.world.entity.variant.SpawnPrioritySelectors;
+import net.minecraft.world.level.biome.Biome;
 import potatowolfie.silly_goose.SillyGoose;
 import potatowolfie.silly_goose.registry.SillyGooseRegistryKeys;
 
 public class GooseVariants {
-    public static final RegistryKey<GooseVariant> TEMPERATE;
-    public static final RegistryKey<GooseVariant> WARM;
-    public static final RegistryKey<GooseVariant> COLD;
-    public static final RegistryKey<GooseVariant> DEFAULT;
-
+    public static final ResourceKey<GooseVariant> TEMPERATE;
+    public static final ResourceKey<GooseVariant> WARM;
+    public static final ResourceKey<GooseVariant> COLD;
+    public static final ResourceKey<GooseVariant> DEFAULT;
     public GooseVariants() {
     }
 
-    private static RegistryKey<GooseVariant> of(Identifier id) {
-        return RegistryKey.of(SillyGooseRegistryKeys.GOOSE_VARIANT, id);
+    private static ResourceKey<GooseVariant> createKey(String path) {
+        return ResourceKey.create(SillyGooseRegistryKeys.GOOSE_VARIANT,
+                Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, path));
     }
 
-    public static void bootstrap(Registerable<GooseVariant> registry) {
-        register(registry, TEMPERATE, GooseVariant.Model.NORMAL, "temperate_goose", SpawnConditionSelectors.createFallback(0));
-        register(registry, WARM, GooseVariant.Model.WARM, "warm_goose", BiomeTags.SPAWNS_WARM_VARIANT_FARM_ANIMALS);
-        register(registry, COLD, GooseVariant.Model.COLD, "cold_goose", BiomeTags.SPAWNS_COLD_VARIANT_FARM_ANIMALS);
+    public static void bootstrap(BootstrapContext<GooseVariant> context) {
+        register(context, TEMPERATE, GooseVariant.Model.NORMAL, "temperate_goose", "goose_temperate_baby", SpawnPrioritySelectors.fallback(0));
+        register(context, WARM, GooseVariant.Model.WARM, "warm_goose", "goose_warm_baby", BiomeTags.SPAWNS_WARM_VARIANT_FARM_ANIMALS);
+        register(context, COLD, GooseVariant.Model.COLD, "cold_goose", "goose_cold_baby", BiomeTags.SPAWNS_COLD_VARIANT_FARM_ANIMALS);
     }
 
-    private static void register(Registerable<GooseVariant> registry, RegistryKey<GooseVariant> key, GooseVariant.Model model, String textureName, TagKey<Biome> biomes) {
-        RegistryEntryList<Biome> registryEntryList = registry.getRegistryLookup(RegistryKeys.BIOME).getOrThrow(biomes);
-        register(registry, key, model, textureName, SpawnConditionSelectors.createSingle(new BiomeSpawnCondition(registryEntryList), 1));
+    private static void register(BootstrapContext<GooseVariant> context, ResourceKey<GooseVariant> name, GooseVariant.Model model, String textureName, String babyTextureName, TagKey<Biome> spawnBiome) {
+        HolderSet<Biome> biomes = context.lookup(Registries.BIOME).getOrThrow(spawnBiome);
+        register(context, name, model, textureName, babyTextureName, SpawnPrioritySelectors.single(new BiomeCheck(biomes), 1));
     }
 
-    private static void register(Registerable<GooseVariant> registry, RegistryKey<GooseVariant> key, GooseVariant.Model model, String textureName, SpawnConditionSelectors spawnConditions) {
-        Identifier identifier = Identifier.of(SillyGoose.MOD_ID, "textures/entity/goose/" + textureName);
-        registry.register(key, new GooseVariant(new ModelAndTexture<>(model, identifier), spawnConditions));
+    private static void register(BootstrapContext<GooseVariant> context, ResourceKey<GooseVariant> name, GooseVariant.Model model, String textureName, String babyTextureName, SpawnPrioritySelectors selectors) {
+        Identifier textureId = Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "entity/goose/" + textureName);
+        Identifier babyTextureId = Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "entity/goose/" + babyTextureName);
+
+        context.register(name, new GooseVariant(
+                new ModelAndTexture<>(model, textureId),
+                new ClientAsset.ResourceTexture(babyTextureId),
+                selectors
+        ));
     }
 
     static {
-        TEMPERATE = of(Identifier.of(SillyGoose.MOD_ID, "temperate"));
-        WARM = of(Identifier.of(SillyGoose.MOD_ID, "warm"));
-        COLD = of(Identifier.of(SillyGoose.MOD_ID, "cold"));
+        TEMPERATE = createKey(TemperatureVariants.TEMPERATE.getPath());
+        WARM = createKey(TemperatureVariants.WARM.getPath());
+        COLD = createKey(TemperatureVariants.COLD.getPath());
         DEFAULT = TEMPERATE;
     }
 }

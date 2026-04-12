@@ -1,12 +1,12 @@
 package potatowolfie.silly_goose.entity;
 
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnGroup;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import potatowolfie.silly_goose.SillyGoose;
 import potatowolfie.silly_goose.entity.egg.BigGooseEggEntity;
 import potatowolfie.silly_goose.entity.egg.GooseEggEntity;
@@ -15,38 +15,38 @@ import potatowolfie.silly_goose.entity.goose.GooseEntity;
 
 public class SillyGooseEntities {
 
-    public static final EntityType<GooseEntity> GOOSE = Registry.register(Registries.ENTITY_TYPE,
-            Identifier.of(SillyGoose.MOD_ID, "goose"),
-            EntityType.Builder.create(GooseEntity::new, SpawnGroup.CREATURE)
-                    .maxTrackingRange(48).dimensions(0.625F, 1.375F)
-                    .build(RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(SillyGoose.MOD_ID, "goose"))));
+    public static final EntityType<GooseEntity> GOOSE = Registry.register(BuiltInRegistries.ENTITY_TYPE,
+            Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "goose"),
+            EntityType.Builder.of(GooseEntity::new, MobCategory.CREATURE)
+                    .clientTrackingRange(48).sized(0.625F, 1.375F)
+                    .build(ResourceKey.create(Registries.ENTITY_TYPE, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "goose"))));
 
     public static final EntityType<GooseEggEntity> WHITE_EGG = Registry.register(
-            Registries.ENTITY_TYPE,
-            Identifier.of(SillyGoose.MOD_ID, "white_egg"),
-            EntityType.Builder.<GooseEggEntity>create(GooseEggEntity::new, SpawnGroup.MISC)
-                    .dimensions(0.25F, 0.25F)
-                    .maxTrackingRange(4)
-                    .trackingTickInterval(10)
-                    .build(RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(SillyGoose.MOD_ID, "white_egg"))));
+            BuiltInRegistries.ENTITY_TYPE,
+            Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "white_egg"),
+            EntityType.Builder.<GooseEggEntity>of(GooseEggEntity::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .clientTrackingRange(4)
+                    .updateInterval(10)
+                    .build(ResourceKey.create(Registries.ENTITY_TYPE, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "white_egg"))));
 
     public static final EntityType<BigGooseEggEntity> BIG_WHITE_EGG = Registry.register(
-            Registries.ENTITY_TYPE,
-            Identifier.of(SillyGoose.MOD_ID, "big_white_egg"),
-            EntityType.Builder.<BigGooseEggEntity>create(BigGooseEggEntity::new, SpawnGroup.MISC)
-                    .dimensions(0.25F, 0.25F)
-                    .maxTrackingRange(4)
-                    .trackingTickInterval(10)
-                    .build(RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(SillyGoose.MOD_ID, "big_white_egg"))));
+            BuiltInRegistries.ENTITY_TYPE,
+            Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "big_white_egg"),
+            EntityType.Builder.<BigGooseEggEntity>of(BigGooseEggEntity::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .clientTrackingRange(4)
+                    .updateInterval(10)
+                    .build(ResourceKey.create(Registries.ENTITY_TYPE, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "big_white_egg"))));
 
     public static final EntityType<SmallGooseEggEntity> SMALL_WHITE_EGG = Registry.register(
-            Registries.ENTITY_TYPE,
-            Identifier.of(SillyGoose.MOD_ID, "small_white_egg"),
-            EntityType.Builder.<SmallGooseEggEntity>create(SmallGooseEggEntity::new, SpawnGroup.MISC)
-                    .dimensions(0.25F, 0.25F)
-                    .maxTrackingRange(4)
-                    .trackingTickInterval(10)
-                    .build(RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(SillyGoose.MOD_ID, "small_white_egg"))));
+            BuiltInRegistries.ENTITY_TYPE,
+            Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "small_white_egg"),
+            EntityType.Builder.<SmallGooseEggEntity>of(SmallGooseEggEntity::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .clientTrackingRange(4)
+                    .updateInterval(10)
+                    .build(ResourceKey.create(Registries.ENTITY_TYPE, Identifier.fromNamespaceAndPath(SillyGoose.MOD_ID, "small_white_egg"))));
 
     public static void registerModEntities() {
         SillyGoose.LOGGER.info("Registering the HONK HONK (goose) Entities for " + SillyGoose.MOD_ID);

@@ -1,5 +1,6 @@
 {
   "asset_id": "silly-goose:entity/goose/temperate_goose",
+  "baby_texture": "silly-goose:entity/goose/goose_temperate_baby",
   "spawn_conditions": [
     {
       "priority": 0
