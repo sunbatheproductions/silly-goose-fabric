@@ -1,0 +1,28 @@
+{
+  "display": {
+    "icon": {
+      "id": "minecraft:stone_sword"
+    },
+    "title": {
+      "translate": "advancement.silly-goose.peace_was_never_an_option.title"
+    },
+    "description": {
+      "translate": "advancement.silly-goose.peace_was_never_an_option.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": true
+  },
+  "parent": "silly-goose:adventure/honk_and_run",
+  "criteria": {
+    "peace_was_never_an_option": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "peace_was_never_an_option"
+    ]
+  ]
+}

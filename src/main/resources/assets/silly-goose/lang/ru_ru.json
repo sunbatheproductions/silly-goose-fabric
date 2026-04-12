@@ -31,6 +31,8 @@
   "advancement.silly-goose.hit_and_run.description": "Получите удар от гуся держащего меч",
   "advancement.silly-goose.unfair_trade.title": "Невыгодная сделка",
   "advancement.silly-goose.unfair_trade.description": "Дайте гусю еды чтобы обменять меч",
+  "advancement.silly-goose.peace_was_never_an_option.title": "Спидран по гусю. Поехали!",
+  "advancement.silly-goose.peace_was_never_an_option.description": "Дайте гусю эффект скорости",
 
   "splash.silly-goose.honk": "HONK HONK",
   "splash.silly-goose.silly_goose": "You're a silly goose!",
@@ -42,6 +44,10 @@
   "splash.silly-goose.untitled_goose_game": "Also try Untitled Goose Game!",
   "splash.silly-goose.no_geese_allowed": "No geese allowed!",
   "splash.silly-goose.honking": "*honking intensifies*",
+  "splash.silly-goose.trust": "Geese should NOT be trusted.",
+  "splash.silly-goose.peace": "Peace was never an option.",
+  "splash.silly-goose.titled": "Titled Goose Game!",
+  "splash.silly-goose.i11ushenka": "Такой же толстый гусь!",
 
   "tag.item.silly-goose.goose_eggs": "Яйцо гуся",
 

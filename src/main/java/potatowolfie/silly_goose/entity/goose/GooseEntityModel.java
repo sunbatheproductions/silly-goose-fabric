@@ -190,7 +190,7 @@ public class GooseEntityModel extends EntityModel<GooseEntityRenderState> implem
 			matrices.mulPose(Axis.YP.rotationDegrees(-100.0F));
 			matrices.mulPose(Axis.ZP.rotationDegrees(90.0F));
 			matrices.scale(0.85F, 0.85F, 0.85F);
-		} else if (stack.is(Items.WHEAT)){
+		} else if (stack.is(Items.WHEAT) || stack.is(Items.BREAD)){
 			matrices.translate(-0.09, -1.25, -0.355);
 			matrices.mulPose(Axis.XP.rotationDegrees(170.0F));
 			matrices.mulPose(Axis.YP.rotationDegrees(-45.0F));

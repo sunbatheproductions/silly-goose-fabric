@@ -73,6 +73,8 @@ public class GooseEntityRenderer extends MobRenderer<GooseEntity, GooseEntityRen
     public void extractRenderState(GooseEntity entity, GooseEntityRenderState state, float f) {
         super.extractRenderState(entity, state, f);
 
+        ArmedEntityRenderState.extractArmedEntityRenderState(entity, state, this.itemModelManager, f);
+
         GooseVariant variant = (GooseVariant)entity.getVariant().value();
         state.variant = variant;
 

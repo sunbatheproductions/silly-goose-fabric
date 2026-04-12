@@ -43,7 +43,7 @@ public class GooseStealFromVillagerGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return targetVillager != null && targetVillager.isAlive() && goose.getMainHandItem().isEmpty();
+        return targetVillager != null && targetVillager.isAlive() && !goose.isInHitAndRunMode();
     }
 
     @Override
@@ -70,16 +70,17 @@ public class GooseStealFromVillagerGoal extends Goal {
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
             // Define "Valuable": Emeralds, food, or specific modded items
-            if (!stack.isEmpty() && (stack.is(Items.EMERALD) || stack.is(Items.WHEAT))) {
+            if (!stack.isEmpty() && (stack.is(Items.EMERALD) || stack.is(Items.WHEAT) || stack.is(Items.BREAD))) {
+                goose.setInHitAndRunMode(true);
+
                 ItemStack stolenStack = stack.split(1);
                 goose.setItemSlot(EquipmentSlot.MAINHAND, stolenStack);
                 goose.setDropChance(EquipmentSlot.MAINHAND, 2.0F);
-                
+
                 goose.playSound(SoundEvents.ITEM_PICKUP, 1.0F, 1.0F);
                 targetVillager.playSound(SoundEvents.VILLAGER_NO, 1.0F, 1.0F);
-                
+
                 // Set goose into "Hit and Run" mode to escape with the loot
-                goose.setInHitAndRunMode(true);
                 this.targetVillager = null;
                 break;
             }

@@ -36,5 +36,9 @@ public class SplashTextMixin {
         splashes.add(Component.translatable("splash.silly-goose.untitled_goose_game").setStyle(splashStyle));
         splashes.add(Component.translatable("splash.silly-goose.no_geese_allowed").setStyle(splashStyle));
         splashes.add(Component.translatable("splash.silly-goose.honking").setStyle(splashStyle));
+        splashes.add(Component.translatable("splash.silly-goose.trust").setStyle(splashStyle));
+        splashes.add(Component.translatable("splash.silly-goose.peace").setStyle(splashStyle));
+        splashes.add(Component.translatable("splash.silly-goose.titled").setStyle(splashStyle));
+        splashes.add(Component.translatable("splash.silly-goose.i11ushenka").setStyle(splashStyle));
     }
 }

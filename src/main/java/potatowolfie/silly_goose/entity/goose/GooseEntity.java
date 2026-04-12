@@ -19,6 +19,8 @@ import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -42,6 +44,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import potatowolfie.silly_goose.advancement.PeaceWasNeverAnOptionAdvancementHandler;
 import potatowolfie.silly_goose.advancement.UnfairTradeAdvancementHandler;
 import potatowolfie.silly_goose.entity.SillyGooseEntities;
 import potatowolfie.silly_goose.entity.goose.goals.*;
@@ -126,7 +129,7 @@ public class GooseEntity extends Animal {
         this.goalSelector.addGoal(0, new GooseRevengeGoal(this));
         this.goalSelector.addGoal(1, new GooseHitAndRunGoal(this));
         this.goalSelector.addGoal(2, new GooseStealFromVillagerGoal(this));
-        this.goalSelector.addGoal(3, new PanicGoal(this, 1.4));
+        this.goalSelector.addGoal(3, new GoosePanicGoal(this, 1.4));
         this.goalSelector.addGoal(4, new BreedGoal(this, 1.0));
         this.goalSelector.addGoal(5, new TemptGoal(this, 1.1, stack -> stack.is(ItemTags.CHICKEN_FOOD), false));
         this.goalSelector.addGoal(6, new BabyGooseFollowGoal(this, 1.1));
@@ -205,90 +208,15 @@ public class GooseEntity extends Animal {
         super.tick();
 
         if (this.level().isClientSide()) {
-            if (this.isBaby()) {
-                this.idleAnimationState.stop();
-                this.idleWaterAnimationState.stop();
-                this.walkAnimationState.stop();
-                this.runAnimationState.stop();
-                this.swimAnimationState.stop();
-                this.swimFastAnimationState.stop();
-
-                boolean isMoving = this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-6D;
-
-                this.babyIdleAnimationState.animateWhen(!this.isInWater() && !this.isPanicking() && !isMoving, this.tickCount);
-
-                if (this.isInWater()) {
-                    this.babyIdleWaterAnimationState.animateWhen(!this.isPanicking() && !isMoving, this.tickCount);
-
-                    if (isMoving) {
-                        if (this.isPanicking()) {
-                            this.babySwimFastAnimationState.startIfStopped(this.tickCount);
-                            this.babySwimAnimationState.stop();
-                        } else {
-                            this.babySwimAnimationState.startIfStopped(this.tickCount);
-                            this.babySwimFastAnimationState.stop();
-                        }
-                    } else {
-                        this.babySwimAnimationState.stop();
-                        this.babySwimFastAnimationState.stop();
-                    }
-                } else {
-                    this.babyIdleWaterAnimationState.stop();
-                    if (isMoving) {
-                        if (this.isPanicking()) {
-                            this.babyRunAnimationState.startIfStopped(this.tickCount);
-                            this.babyWalkAnimationState.stop();
-                        } else {
-                            this.babyWalkAnimationState.startIfStopped(this.tickCount);
-                            this.babyRunAnimationState.stop();
-                        }
-                    } else {
-                        this.babyWalkAnimationState.stop();
-                        this.babyRunAnimationState.stop();
-                    }
-                }
-            } else {
-                this.babyIdleAnimationState.stop();
-                this.babyIdleWaterAnimationState.stop();
-                this.babyWalkAnimationState.stop();
-                this.babyRunAnimationState.stop();
-                this.babySwimAnimationState.stop();
-                this.babySwimFastAnimationState.stop();
-
-                boolean isMoving = this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-6D;
-
-                this.idleAnimationState.animateWhen(!this.isInWater() && !this.isPanicking() && !isMoving, this.tickCount);
-
-                if (this.isInWater()) {
-                    this.idleWaterAnimationState.animateWhen(!this.isPanicking() && !isMoving, this.tickCount);
-                    if (isMoving) {
-                        if (this.isPanicking()) {
-                            this.swimFastAnimationState.startIfStopped(this.tickCount);
-                            this.swimAnimationState.stop();
-                        } else {
-                            this.swimAnimationState.startIfStopped(this.tickCount);
-                            this.swimFastAnimationState.stop();
-                        }
-                    } else {
-                        this.swimAnimationState.stop();
-                        this.swimFastAnimationState.stop();
-                    }
-                } else {
-                    this.idleWaterAnimationState.stop();
-                    if (isMoving) {
-                        if (this.isPanicking()) {
-                            this.runAnimationState.startIfStopped(this.tickCount);
-                            this.walkAnimationState.stop();
-                        } else {
-                            this.walkAnimationState.startIfStopped(this.tickCount);
-                            this.runAnimationState.stop();
-                        }
-                    } else {
-                        this.walkAnimationState.stop();
-                        this.runAnimationState.stop();
-                    }
-                }
-            }
+            setupAnimationStates();
+        } else {
+            handleWaterFloating();
+            handlePreferenceChange();
+            handleOffPreferenceTimer();
+            handleEggLaying();
+            handleRevengeTimer();
+            handleSwordPickupCooldown();
+            handleBabyPanic();
         }
     }
 
@@ -549,6 +477,19 @@ public class GooseEntity extends Animal {
         return this.isBaby() ? BABY_DIMENSIONS : super.getDefaultDimensions(pose);
     }
 
+    @Override
+    public boolean addEffect(MobEffectInstance effectInstance, @Nullable Entity source) {
+        boolean added = super.addEffect(effectInstance, source);
+
+        if (added && !this.level().isClientSide() && source instanceof ServerPlayer player) {
+            if (effectInstance.getEffect() == MobEffects.SPEED) {
+                PeaceWasNeverAnOptionAdvancementHandler.grantPeaceWasNeverAnOptionAdvancement(player);
+            }
+        }
+
+        return added;
+    }
+
     private void handlePreferenceChange() {
         if (this.isBaby()) {
             return;
@@ -677,7 +618,9 @@ public class GooseEntity extends Animal {
         boolean inWater = this.isInWater();
         boolean isMovingHorizontally = this.getDeltaMovement().horizontalDistanceSqr() > 0.001;
         boolean isInHitAndRun = this.isInHitAndRunMode();
-        boolean isRunning = isMovingHorizontally && isInHitAndRun;
+        boolean isPanicking = this.isPanicking();
+        boolean isRunning = isMovingHorizontally && (isInHitAndRun || isPanicking);
+        boolean isBaby = this.isBaby();
 
         if (this.idleAnimationTimeout <= 0) {
             this.idleAnimationTimeout = 2;
@@ -686,21 +629,21 @@ public class GooseEntity extends Animal {
 
             if (inWater) {
                 if (isRunning) {
-                    targetAnimation = this.swimFastAnimationState;
+                    targetAnimation = isBaby ? this.babySwimFastAnimationState : this.swimFastAnimationState;
                 } else if (isMovingHorizontally) {
-                    targetAnimation = this.swimAnimationState;
+                    targetAnimation = isBaby ? this.babySwimAnimationState : this.swimAnimationState;
                 } else {
-                    targetAnimation = this.idleWaterAnimationState;
+                    targetAnimation = isBaby ? this.babyIdleWaterAnimationState : this.idleWaterAnimationState;
                 }
             } else {
                 if (isRunning) {
-                    targetAnimation = this.runAnimationState;
+                    targetAnimation = isBaby ? this.babyRunAnimationState : this.runAnimationState;
                 } else if (isMovingHorizontally) {
-                    targetAnimation = this.walkAnimationState;
+                    targetAnimation = isBaby ? this.babyWalkAnimationState : this.walkAnimationState;
                 } else if (isInHitAndRun) {
-                    targetAnimation = this.wingsUpIdleAnimationState;
+                    targetAnimation = isBaby ? this.babyWingsUpIdleAnimationState : this.wingsUpIdleAnimationState;
                 } else {
-                    targetAnimation = this.idleAnimationState;
+                    targetAnimation = isBaby ? this.babyIdleAnimationState : this.idleAnimationState;
                 }
             }
 
@@ -712,6 +655,14 @@ public class GooseEntity extends Animal {
                 this.swimAnimationState.stop();
                 this.swimFastAnimationState.stop();
                 this.wingsUpIdleAnimationState.stop();
+
+                this.babyIdleAnimationState.stop();
+                this.babyIdleWaterAnimationState.stop();
+                this.babyWalkAnimationState.stop();
+                this.babyRunAnimationState.stop();
+                this.babySwimAnimationState.stop();
+                this.babySwimFastAnimationState.stop();
+                this.babyWingsUpIdleAnimationState.stop();
 
                 targetAnimation.start(this.tickCount);
             }
@@ -738,8 +689,12 @@ public class GooseEntity extends Animal {
         if (!this.getItemBySlot(equipmentSlot).isEmpty()) {
             return false;
         }
+
         return equipmentSlot == EquipmentSlot.MAINHAND &&
-                stack.is(ItemTags.SWORDS) &&
+                (stack.is(ItemTags.SWORDS) ||
+                        stack.is(Items.EMERALD) ||
+                        stack.is(Items.WHEAT) ||
+                        stack.is(Items.BREAD)) &&
                 this.canPickUpLoot();
     }
 

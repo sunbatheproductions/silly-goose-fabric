@@ -31,6 +31,8 @@
   "advancement.silly-goose.hit_and_run.description": "Get hit by a goose holding a sword",
   "advancement.silly-goose.unfair_trade.title": "Unfair Trade",
   "advancement.silly-goose.unfair_trade.description": "Give a goose food in turn for a sword",
+  "advancement.silly-goose.peace_was_never_an_option.title": "Peace Was Never an Option",
+  "advancement.silly-goose.peace_was_never_an_option.description": "Give a goose a speed effect",
 
   "splash.silly-goose.honk": "HONK HONK",
   "splash.silly-goose.silly_goose": "You're a silly goose!",
@@ -42,6 +44,10 @@
   "splash.silly-goose.untitled_goose_game": "Also try Untitled Goose Game!",
   "splash.silly-goose.no_geese_allowed": "No geese allowed!",
   "splash.silly-goose.honking": "*honking intensifies*",
+  "splash.silly-goose.trust": "Geese should NOT be trusted.",
+  "splash.silly-goose.peace": "Peace was never an option.",
+  "splash.silly-goose.titled": "Titled Goose Game!",
+  "splash.silly-goose.i11ushenka": "Insert a goose-related reference here.",
 
   "tag.item.silly-goose.goose_eggs": "Goose Egg",
 
